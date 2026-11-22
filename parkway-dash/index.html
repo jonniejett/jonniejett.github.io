@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Palisades Parkway Dash – Jonnie's Game Room</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#0e1a12;color:#f3efe2;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none;overflow:hidden}
+.wrap{height:100%;display:flex;flex-direction:column;align-items:center;padding:6px}
+.top{width:100%;max-width:440px;display:flex;justify-content:space-between;align-items:center;padding:2px 4px 6px}
+.top a{color:#a9d1a0;text-decoration:none;font-size:14px}
+.top b{font-size:15px}
+.stage{position:relative;flex:1;width:100%;display:flex;justify-content:center;align-items:flex-start;min-height:0}
+canvas{height:100%;max-width:100%;aspect-ratio:9/16;border-radius:14px;box-shadow:0 0 0 3px #2c4a2a,0 16px 40px rgba(0,0,0,.6);touch-action:none;background:#2f6b2a}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.panel{pointer-events:auto;background:rgba(10,20,12,.9);border:2px solid #4f7f45;border-radius:16px;padding:20px;max-width:320px;text-align:center;box-shadow:0 14px 40px rgba(0,0,0,.6)}
+.panel h2{margin:0 0 6px;font-size:28px;color:#ffd34d;text-shadow:0 2px 0 #4a3500}
+.panel p{margin:6px 0;line-height:1.45;font-size:15px}
+.panel button{margin-top:12px;border:none;border-radius:10px;background:#ffd34d;color:#2a2000;font:800 18px system-ui,sans-serif;padding:12px 26px;cursor:pointer}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="https://jonniejett.github.io/">← Game Room</a><b>🚗 Parkway Dash</b><span id="hi">Best: 0</span></div>
+  <div class="stage">
+    <canvas id="c" width="360" height="640"></canvas>
+    <div class="overlay" id="ov"><div class="panel" id="panel">
+      <h2>Parkway Dash</h2>
+      <p>Drive the Palisades Parkway as far as you can!</p>
+      <p>👆 <b>Swipe</b> or <b>tap</b> left/right to change lanes.<br>⌨️ Arrow keys work too.</p>
+      <p>Dodge 🦌 deer, 🕳️ potholes, 🚧 cones and traffic.<br>Grab 🥯 bagels and ⛽ gas for bonus points.</p>
+      <button id="go">Start driving</button>
+    </div></div>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const W=360,H=640,ROAD_L=60,ROAD_W=240,LANES=3,LW=ROAD_W/LANES;
+const laneX=i=>ROAD_L+LW*i+LW/2;
+const EXITS=["Next Exit · Orangeburg","Next Exit · Blauvelt","Next Exit · Nanuet","Next Exit · Thruway","Next Exit · New City","Next Exit · Spring Valley","Next Exit · Pomona","Next Exit · Thiells","Next Exit · Stony Point","Next Exit · Harriman","Next Exit · Bear Mountain"];
+const store={get(k,d){try{const v=localStorage.getItem('pd_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('pd_'+k,JSON.stringify(v))}catch(e){}}};
+let best=store.get('best',0);document.getElementById('hi').textContent='Best: '+best;
+
+let state='menu',car,things,trees,dash,speed,dist,bonus,spawnT,signT,sign,popups,shake,last,exitIdx;
+function reset(){
+  car={lane:1,x:laneX(1),y:H-110};things=[];popups=[];dash=0;speed=4.2;dist=0;bonus=0;spawnT=40;signT=200;sign=null;shake=0;exitIdx=0;
+  trees=[];for(let i=0;i<14;i++)trees.push(newTree(Math.random()*H));
+}
+function newTree(y){const left=Math.random()<.5;return{x:left?8+Math.random()*38:W-46+Math.random()*38,y,e:Math.random()<.85?'🌳':'🌲',s:26+Math.random()*12}}
+
+const TYPES=[
+ {k:'deer',e:'🦌',w:.22,bad:1,move:true},
+ {k:'hole',w:.18,bad:1},
+ {k:'cone',e:'🚧',w:.14,bad:1},
+ {k:'car',w:.26,bad:1},
+ {k:'bagel',e:'🥯',w:.12,pts:50},
+ {k:'gas',e:'⛽',w:.08,pts:100}
+];
+const CAR_COLORS=['#d93a3a','#2f6fd6','#f2f2f2','#222','#7a3fbf','#3aa35a'];
+function pickType(){let r=Math.random(),a=0;for(const t of TYPES){a+=t.w;if(r<a)return t}return TYPES[0]}
+function spawn(){
+  // keep at least one lane open in each wave
+  const n=Math.random()<Math.min(.15+dist/20000,.55)?2:1;
+  const lanes=[0,1,2].sort(()=>Math.random()-.5).slice(0,n);
+  for(const l of lanes){const t=pickType();
+    const o={...t,lane:l,x:laneX(l),y:-60,col:CAR_COLORS[Math.floor(Math.random()*CAR_COLORS.length)],v:t.k==='car'?-(1+Math.random()*1.4):0,dx:0};
+    if(t.k==='deer'&&Math.random()<.6){o.lane=Math.random()<.5?-1:3;o.x=o.lane<0?ROAD_L-20:ROAD_L+ROAD_W+20;o.dx=(o.lane<0?1:-1)*(0.9+Math.random()*.6);o.e='🦌'}
+    things.push(o)}
+}
+function changeLane(d){if(state!=='play')return;car.lane=Math.max(0,Math.min(2,car.lane+d))}
+
+function update(dt){
+  dist+=speed*dt;speed=Math.min(4.2+dist/1400,13);
+  dash=(dash+speed*dt)%48;
+  car.x+=(laneX(car.lane)-car.x)*Math.min(1,.28*dt);
+  for(const t of trees){t.y+=speed*dt;if(t.y>H+40)Object.assign(t,newTree(-40-Math.random()*60))}
+  spawnT-=speed*dt;if(spawnT<=0){spawn();spawnT=Math.max(130,260-dist/80)+Math.random()*90}
+  signT-=speed*dt;if(signT<=0&&!sign){sign={y:-80,text:EXITS[exitIdx%EXITS.length]};exitIdx++;signT=1600}
+  if(sign){sign.y+=speed*dt;if(sign.y>H+80)sign=null}
+  for(const o of things){o.y+=(speed+o.v)*dt;if(o.dx){o.x+=o.dx*dt*1.4;if((o.dx>0&&o.x>ROAD_L+ROAD_W+30)||(o.dx<0&&o.x<ROAD_L-30))o.dx=0}}
+  things=things.filter(o=>o.y<H+80&&!o.gone);
+  for(const o of things){
+    const hw=o.k==='car'?22:18,hh=o.k==='car'?34:18;
+    if(Math.abs(o.x-car.x)<hw+16&&Math.abs(o.y-car.y)<hh+30){
+      if(o.bad){crash(o);return}
+      o.gone=true;bonus+=o.pts;popups.push({x:o.x,y:o.y,t:'+'+o.pts,a:1})}
+  }
+  for(const p of popups){p.y-=1.2*dt;p.a-=.02*dt}popups=popups.filter(p=>p.a>0);
+}
+function score(){return Math.floor(dist/10)+bonus}
+function crash(o){state='over';shake=14;
+  const s=score(),nb=s>best;if(nb){best=s;store.set('best',best);document.getElementById('hi').textContent='Best: '+best}
+  const what={deer:'You hit a deer! 🦌',hole:'Busted a tire in a pothole! 🕳️',cone:'Plowed through the cones! 🚧',car:'Fender bender! 🚙'}[o.k];
+  setTimeout(()=>showPanel(`<h2>Crash!</h2><p>${what}</p><p style="font-size:22px"><b>${s}</b> points${nb?'<br>🏆 New best!':''}</p><p>Best: ${best}</p><button id="go">Drive again</button>`),700)}
+
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function drawCar(x,y,col,up){ctx.save();ctx.translate(x,y);if(!up)ctx.rotate(Math.PI);
+  ctx.fillStyle='rgba(0,0,0,.3)';rr(-20,-32,44,68,10);ctx.fill();
+  ctx.fillStyle=col;rr(-22,-36,44,72,11);ctx.fill();
+  ctx.fillStyle='#9fd3ff';rr(-16,-22,32,16,4);ctx.fill();
+  ctx.fillStyle='rgba(159,211,255,.7)';rr(-15,14,30,11,4);ctx.fill();
+  ctx.fillStyle='#ffef9a';ctx.fillRect(-18,-37,8,4);ctx.fillRect(10,-37,8,4);
+  ctx.fillStyle='#ff4b4b';ctx.fillRect(-18,33,8,4);ctx.fillRect(10,33,8,4);
+  ctx.restore()}
+function emoji(e,x,y,s){ctx.font=s+'px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(e,x,y)}
+
+function draw(){
+  ctx.save();if(shake>0){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.9;if(shake<.5)shake=0}
+  ctx.fillStyle='#3d7a34';ctx.fillRect(-20,-20,W+40,H+40);
+  ctx.fillStyle='#6b6b6b';ctx.fillRect(ROAD_L-8,-20,ROAD_W+16,H+40);
+  ctx.fillStyle='#3b3d40';ctx.fillRect(ROAD_L,-20,ROAD_W,H+40);
+  ctx.fillStyle='#f5f5f5';ctx.fillRect(ROAD_L+3,-20,3,H+40);ctx.fillRect(ROAD_L+ROAD_W-6,-20,3,H+40);
+  ctx.fillStyle='#f2f2f2';for(let l=1;l<LANES;l++)for(let y=-48+dash;y<H;y+=48)ctx.fillRect(ROAD_L+LW*l-2,y,4,26);
+  for(const t of trees)emoji(t.e,t.x+12,t.y,t.s);
+  if(sign){const sx=W-58,sy=sign.y;ctx.fillStyle='#555';ctx.fillRect(sx+24,sy,4,60);ctx.fillStyle='#106b3a';rr(sx-60,sy-26,112,36,6);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;rr(sx-57,sy-23,106,30,5);ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 11px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';const [a,b]=sign.text.split(' · ');ctx.fillText(a,sx-4,sy-15);ctx.fillText(b,sx-4,sy-2)}
+  for(const o of things){
+    if(o.k==='car')drawCar(o.x,o.y,o.col,true);
+    else if(o.k==='hole'){ctx.fillStyle='#1b1b1c';ctx.beginPath();ctx.ellipse(o.x,o.y,22,14,0,0,7);ctx.fill();ctx.strokeStyle='#555';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#0b0b0b';ctx.beginPath();ctx.ellipse(o.x+2,o.y+2,13,8,0,0,7);ctx.fill()}
+    else{ctx.save();if(o.k==='deer'&&o.dx>0){ctx.translate(o.x,o.y);ctx.scale(-1,1);emoji(o.e,0,0,38)}else emoji(o.e,o.x,o.y,o.k==='deer'?38:32);ctx.restore()}
+  }
+  drawCar(car.x,car.y,'#ffcc22',true);ctx.fillStyle='#111';ctx.fillRect(car.x-6,car.y-36,4,72);ctx.fillRect(car.x+2,car.y-36,4,72);
+  ctx.restore();
+  ctx.fillStyle='rgba(0,0,0,.45)';rr(10,10,140,46,10);ctx.fill();
+  ctx.fillStyle='#fff';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.font='bold 22px system-ui,sans-serif';ctx.fillText(score(),20,36);
+  ctx.font='11px system-ui,sans-serif';ctx.fillText(Math.round(25+speed*6)+' mph',20,50);
+  for(const p of popups){ctx.globalAlpha=Math.max(0,p.a);ctx.fillStyle='#ffd34d';ctx.font='bold 20px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(p.t,p.x,p.y);ctx.globalAlpha=1}
+}
+function loop(ts){const dt=last?Math.min((ts-last)/16.67,3):1;last=ts;if(state==='play')update(dt);draw();requestAnimationFrame(loop)}
+
+const ov=document.getElementById('ov'),panel=document.getElementById('panel');
+function showPanel(html){panel.innerHTML=html;ov.classList.remove('hidden');document.getElementById('go').onclick=begin}
+function begin(){reset();state='play';ov.classList.add('hidden')}
+document.getElementById('go').onclick=begin;
+
+let sx=null,sy=null,moved=false;
+cv.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;moved=false;e.preventDefault()},{passive:false});
+cv.addEventListener('touchmove',e=>{if(sx===null||moved)return;const t=e.touches[0],dx=t.clientX-sx;if(Math.abs(dx)>28){changeLane(dx>0?1:-1);moved=true}e.preventDefault()},{passive:false});
+cv.addEventListener('touchend',e=>{if(!moved&&sx!==null){const r=cv.getBoundingClientRect();changeLane(sx<r.left+r.width/2?-1:1)}sx=null},{passive:false});
+cv.addEventListener('mousedown',e=>{const r=cv.getBoundingClientRect();changeLane(e.clientX<r.left+r.width/2?-1:1)});
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a'){changeLane(-1);e.preventDefault()}if(e.key==='ArrowRight'||e.key==='d'){changeLane(1);e.preventDefault()}if((e.key===' '||e.key==='Enter')&&state!=='play')begin()});
+reset();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rockland Wordle – Jonnie's Game Room</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#121a1d;color:#f4f1e6;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+.wrap{max-width:500px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding:8px 8px 12px}
+.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2c3a3f;padding:4px 2px 8px}
+.top a{color:#9fc6cf;text-decoration:none;font-size:14px}
+h1{margin:0;font-size:22px;letter-spacing:.04em}
+h1 span{color:#6aaa64}
+.top>div{white-space:nowrap}
+.btn-ic{background:none;border:none;color:#cfe;font-size:22px;padding:2px 6px;cursor:pointer}
+.sub{text-align:center;font-size:13px;opacity:.7;margin:6px 0 0}
+#board{flex:1;display:grid;grid-template-rows:repeat(6,1fr);gap:6px;width:min(100%,330px);max-height:400px;margin:12px auto;aspect-ratio:5/6}
+.row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.tile{display:grid;place-items:center;border:2px solid #3a4a50;font-weight:800;font-size:clamp(22px,7vw,32px);text-transform:uppercase;border-radius:4px;transition:transform .1s}
+.tile.filled{border-color:#7b8d93;transform:scale(1.04)}
+.tile.flip{animation:flip .5s ease forwards}
+@keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+.g{background:#6aaa64!important;border-color:#6aaa64!important;color:#fff}
+.y{background:#c9b458!important;border-color:#c9b458!important;color:#fff}
+.x{background:#3a3f41!important;border-color:#3a3f41!important;color:#fff}
+.row.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.row.win .tile{animation:hop .5s ease}
+@keyframes hop{50%{transform:translateY(-14px)}}
+#kb{display:flex;flex-direction:column;gap:7px;margin-top:6px}
+.kr{display:flex;gap:5px;justify-content:center}
+.key{flex:1;max-width:44px;height:54px;border:none;border-radius:6px;background:#818384;color:#fff;font:700 15px system-ui,sans-serif;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
+.key.wide{max-width:66px;flex:1.5;font-size:12px}
+.key:active{filter:brightness(1.2)}
+.spacer{flex:.5}
+#toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#f4f1e6;color:#121a1d;font-weight:700;padding:10px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+#toast.show{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;padding:16px;z-index:8}
+.modal.open{display:flex}
+.card{background:#1d282c;border-radius:14px;padding:20px;max-width:380px;width:100%;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+.card h2{margin:0 0 8px}
+.card p{line-height:1.45;font-size:15px;margin:8px 0}
+.fact{background:#26363b;border-radius:10px;padding:10px;font-size:14px}
+.stats{display:flex;justify-content:space-around;margin:12px 0}
+.stats b{display:block;font-size:26px}
+.stats small{font-size:11px;opacity:.7}
+.bar{display:flex;align-items:center;gap:6px;font-size:13px;margin:3px 0}
+.bar i{display:block;background:#3a3f41;padding:2px 6px;border-radius:3px;font-style:normal;text-align:right;min-width:20px}
+.bar i.cur{background:#6aaa64}
+.act{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.act button{border:none;border-radius:8px;padding:10px 14px;font:700 15px system-ui,sans-serif;cursor:pointer}
+.primary{background:#6aaa64;color:#fff}
+.ghost{background:#3a4a50;color:#fff}
+.ex{display:flex;gap:4px;justify-content:center;margin:6px 0}
+.ex .tile{width:38px;height:38px;font-size:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a href="https://jonniejett.github.io/">← Game Room</a>
+    <h1>Rockland <span>Wordle</span></h1>
+    <div><button class="btn-ic" id="helpBtn" aria-label="How to play">❔</button><button class="btn-ic" id="statsBtn" aria-label="Stats">📊</button></div>
+  </div>
+  <p class="sub" id="sub">Daily word</p>
+  <div id="board"></div>
+  <div id="kb"></div>
+</div>
+<div id="toast"></div>
+
+<div class="modal" id="help"><div class="card">
+  <h2>How to play</h2>
+  <p>Guess the 5-letter word in 6 tries. Every word has something to do with Rockland County.</p>
+  <div class="ex"><div class="tile g">N</div><div class="tile">Y</div><div class="tile">A</div><div class="tile">C</div><div class="tile">K</div></div>
+  <p>🟩 Green: right letter, right spot.</p>
+  <div class="ex"><div class="tile">T</div><div class="tile y">R</div><div class="tile">A</div><div class="tile">I</div><div class="tile">L</div></div>
+  <p>🟨 Yellow: the letter is in the word, but in a different spot.<br>⬛ Gray: the letter isn't in the word.</p>
+  <p>There's a new word every day. Want more? Tap <b>Bonus word</b> when you're done.</p>
+  <div class="act"><button class="primary" data-close>Let's play</button></div>
+</div></div>
+
+<div class="modal" id="end"><div class="card">
+  <h2 id="endTitle"></h2>
+  <p id="endWord"></p>
+  <div class="fact" id="endFact"></div>
+  <div class="stats">
+    <div><b id="sPlayed">0</b><small>Played</small></div>
+    <div><b id="sPct">0</b><small>Win %</small></div>
+    <div><b id="sStreak">0</b><small>Streak</small></div>
+    <div><b id="sBest">0</b><small>Best streak</small></div>
+  </div>
+  <div id="dist"></div>
+  <div class="act">
+    <button class="primary" id="shareBtn">Share</button>
+    <button class="ghost" id="bonusBtn">Bonus word</button>
+    <button class="ghost" data-close>Close</button>
+  </div>
+</div></div>
+
+<script>
+const WORDS=[
+ ["NYACK","Nyack is the riverside village where painter Edward Hopper was born in 1882."],
+ ["STONY","In 1779 General Anthony Wayne's troops stormed the British fort at Stony Point in a midnight raid."],
+ ["PEARL","Pearl River is a hamlet in Orangetown, known for its big St. Patrick's Day parade."],
+ ["VIOLA","Viola is a hamlet in the Town of Ramapo."],
+ ["ANDRE","British spy Major John André was tried and hanged in Tappan in 1780."],
+ ["BRICK","In the 1800s Haverstraw was one of the biggest brickmaking towns in the country."],
+ ["RIVER","The Hudson River runs along Rockland's whole eastern edge."],
+ ["TORNE","The Ramapo Torne is a rocky peak with big views over the Torne Valley."],
+ ["FERRY","A ferry crosses the Hudson between Haverstraw and Ossining."],
+ ["POINT","Stony Point Lighthouse, built in 1826, is the oldest lighthouse on the Hudson."],
+ ["HAWKS","Every fall, birders gather on Hook Mountain to count migrating hawks."],
+ ["TRAIN","NJ Transit's Pascack Valley Line stops in Pearl River, Nanuet and Spring Valley."],
+ ["CREEK","Sparkill Creek winds through Tappan and Sparkill to the Hudson at Piermont."],
+ ["LAKES","Rockland Lake was famous for cutting ice and shipping it down to New York City."],
+ ["APPLE","Rockland's orchards, like Dr. Davies Farm in Congers, are packed every fall for apple picking."],
+ ["DUTCH","Dutch settlers farmed around Tappan in the late 1600s."],
+ ["TRAIL","The Long Path hiking trail runs north through Rockland along the Palisades."],
+ ["SLOOP","The sloop Clearwater, Pete Seeger's boat, sails the Hudson past Rockland's shore."],
+ ["HILLS","Hook Mountain and High Tor are the tall hills that look out over the Hudson."],
+ ["CIDER","Hot cider and cider donuts are a must at Rockland's fall farm stands."],
+ ["DINER","Rockland has plenty of classic diners serving breakfast all day."],
+ ["BAGEL","A Rockland weekend morning usually starts with a bagel."],
+ ["PARKS","Rockland has state parks like Harriman, Bear Mountain, Rockland Lake and Hook Mountain."],
+ ["MAPLE","Rockland's maple trees light up the Palisades orange and red every October."],
+ ["SPANS","The Gov. Mario M. Cuomo Bridge spans the Hudson from South Nyack to Tarrytown."],
+ ["HOOKS","Hook Mountain got its name from Dutch sailors, who called a bend in the river a 'hoek', meaning corner."],
+ ["TOWNS","Rockland has five towns: Clarkstown, Haverstraw, Orangetown, Ramapo and Stony Point."],
+ ["MALLS","The Palisades Center in West Nyack is one of the biggest malls in the country."]
+];
+const EPOCH=Date.UTC(2026,10,21);
+const store={get(k,d){try{const v=localStorage.getItem('rw_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('rw_'+k,JSON.stringify(v))}catch(e){}}};
+function todayIdx(){const n=new Date();const d=Math.floor((Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())-EPOCH)/864e5);return((d%WORDS.length)+WORDS.length)%WORDS.length}
+function dayNum(){const n=new Date();return Math.floor((Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())-EPOCH)/864e5)+1}
+
+let answer,fact,guesses,cur,over,bonus,keyState;
+const board=document.getElementById('board'),kb=document.getElementById('kb');
+
+function build(){
+  board.innerHTML='';
+  for(let r=0;r<6;r++){const row=document.createElement('div');row.className='row';for(let c=0;c<5;c++){const t=document.createElement('div');t.className='tile';row.appendChild(t)}board.appendChild(row)}
+  kb.innerHTML='';
+  ["QWERTYUIOP","ASDFGHJKL","ZXCVBNM"].forEach((r,i)=>{const row=document.createElement('div');row.className='kr';
+    if(i===1)row.appendChild(Object.assign(document.createElement('div'),{className:'spacer'}));
+    if(i===2)row.appendChild(mk('ENTER','wide'));
+    for(const ch of r)row.appendChild(mk(ch));
+    if(i===2)row.appendChild(mk('⌫','wide'));
+    if(i===1)row.appendChild(Object.assign(document.createElement('div'),{className:'spacer'}));
+    kb.appendChild(row)});
+}
+function mk(l,cls){const b=document.createElement('button');b.className='key'+(cls?' '+cls:'');b.textContent=l;b.dataset.k=l;b.addEventListener('click',()=>press(l));return b}
+
+function start(isBonus){
+  bonus=isBonus;
+  let idx;
+  if(isBonus){do{idx=Math.floor(Math.random()*WORDS.length)}while(idx===todayIdx()&&WORDS.length>1)}else idx=todayIdx();
+  [answer,fact]=WORDS[idx];guesses=[];cur='';over=false;keyState={};
+  build();
+  document.getElementById('sub').textContent=isBonus?'Bonus word (doesn\'t count in stats)':'Daily word #'+dayNum();
+  if(!isBonus){const saved=store.get('day',null);if(saved&&saved.n===dayNum()){saved.g.forEach(g=>{guesses.push(g);paint(guesses.length-1,g,false)});if(saved.done){over=true;setTimeout(()=>showEnd(saved.won),300)}}}
+}
+
+function score(g){const res=Array(5).fill('x'),a=answer.split('');
+  for(let i=0;i<5;i++)if(g[i]===a[i]){res[i]='g';a[i]=null}
+  for(let i=0;i<5;i++)if(res[i]!=='g'){const j=a.indexOf(g[i]);if(j>-1){res[i]='y';a[j]=null}}
+  return res}
+
+function paint(r,g,anim){const row=board.children[r],res=score(g);
+  [...row.children].forEach((t,i)=>{t.textContent=g[i];t.classList.add('filled');
+    const apply=()=>{t.classList.add(res[i]);setKey(g[i],res[i])};
+    if(anim){setTimeout(()=>{t.classList.add('flip');setTimeout(apply,250)},i*260)}else apply()})}
+function setKey(ch,s){const rank={x:1,y:2,g:3};if((rank[keyState[ch]]||0)>=rank[s])return;keyState[ch]=s;
+  const k=kb.querySelector(`[data-k="${ch}"]`);if(k){k.classList.remove('g','y','x');k.classList.add(s)}}
+
+function press(k){if(over)return;
+  if(k==='ENTER')return submit();
+  if(k==='⌫'||k==='BACKSPACE'){cur=cur.slice(0,-1);return draw()}
+  if(/^[A-Z]$/.test(k)&&cur.length<5){cur+=k;draw()}}
+function draw(){const row=board.children[guesses.length];[...row.children].forEach((t,i)=>{t.textContent=cur[i]||'';t.classList.toggle('filled',!!cur[i])})}
+
+function submit(){
+  const row=board.children[guesses.length];
+  if(cur.length<5){toast('Not enough letters');row.classList.remove('shake');void row.offsetWidth;row.classList.add('shake');return}
+  const g=cur;guesses.push(g);cur='';paint(guesses.length-1,g,true);
+  const won=g===answer,done=won||guesses.length===6;
+  if(!bonus)store.set('day',{n:dayNum(),g:guesses,done,won});
+  if(done){over=true;
+    if(!bonus)record(won);
+    setTimeout(()=>{if(won){row.classList.add('win');toast(['Genius!','Magnificent!','Impressive!','Splendid!','Great!','Phew!'][guesses.length-1])}else toast(answer)},1400);
+    setTimeout(()=>showEnd(won),2600)}
+}
+function record(won){const s=store.get('stats',{played:0,wins:0,streak:0,best:0,dist:[0,0,0,0,0,0],last:0});
+  s.played++;if(won){s.wins++;s.dist[guesses.length-1]++;s.streak=(s.last===dayNum()-1?s.streak:0)+1;s.best=Math.max(s.best,s.streak);s.last=dayNum()}else{s.streak=0}
+  store.set('stats',s)}
+
+function showEnd(won){
+  const s=store.get('stats',{played:0,wins:0,streak:0,best:0,dist:[0,0,0,0,0,0]});
+  document.getElementById('endTitle').textContent=over?(won?'You got it! 🎉':'So close!'):'Statistics';
+  document.getElementById('endWord').innerHTML=over?'The word was <b>'+answer+'</b>':'';
+  document.getElementById('endFact').style.display=over?'block':'none';
+  document.getElementById('endFact').textContent='📍 '+fact;
+  document.getElementById('shareBtn').style.display=over?'':'none';
+  sPlayed.textContent=s.played;sPct.textContent=s.played?Math.round(100*s.wins/s.played):0;sStreak.textContent=s.streak;sBest.textContent=s.best;
+  const mx=Math.max(1,...s.dist);
+  dist.innerHTML=s.dist.map((v,i)=>`<div class="bar">${i+1}<i class="${over&&won&&!bonus&&guesses.length===i+1?'cur':''}" style="width:${8+92*v/mx}%">${v}</i></div>`).join('');
+  open('end')}
+
+function shareText(){const won=guesses[guesses.length-1]===answer;
+  const head=(bonus?'Rockland Wordle (bonus) ':'Rockland Wordle #'+dayNum()+' ')+(won?guesses.length:'X')+'/6';
+  const grid=guesses.map(g=>score(g).map(s=>({g:'🟩',y:'🟨',x:'⬛'})[s]).join('')).join('\n');
+  return head+'\n\n'+grid+'\n\nhttps://jonniejett.github.io/rockland-wordle/'}
+document.getElementById('shareBtn').onclick=async()=>{const t=shareText();
+  try{if(navigator.share){await navigator.share({text:t});return}}catch(e){return}
+  try{await navigator.clipboard.writeText(t);toast('Copied to clipboard')}catch(e){toast('Couldn\'t copy')}};
+document.getElementById('bonusBtn').onclick=()=>{close('end');start(true)};
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1500)}
+function open(id){document.getElementById(id).classList.add('open')}
+function close(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('.modal').classList.remove('open'));
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+helpBtn.onclick=()=>open('help');statsBtn.onclick=()=>showEnd(guesses[guesses.length-1]===answer);
+document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey)return;const k=e.key.toUpperCase();if(k==='ENTER'||k==='BACKSPACE'||/^[A-Z]$/.test(k)){e.preventDefault();press(k)}});
+
+start(false);
+if(!store.get('seenHelp',false)){open('help');store.set('seenHelp',true)}
+</script>
+</body>
+</html>

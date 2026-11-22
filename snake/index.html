@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Snake – Jonnie's Game Room</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:linear-gradient(160deg,#10222b,#0b1418);color:#eef6f2;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none;overflow:hidden}
+.wrap{max-width:460px;margin:0 auto;height:100%;display:flex;flex-direction:column;align-items:center;padding:6px 8px 10px;gap:8px}
+.top{width:100%;display:flex;justify-content:space-between;align-items:center}
+.top a{color:#8fd6b0;text-decoration:none;font-size:14px}
+.scores{width:100%;display:flex;justify-content:space-around;font-size:14px;opacity:.9}
+.scores b{font-size:20px;display:block;text-align:center}
+.stage{position:relative;width:100%;max-width:440px;aspect-ratio:1}
+canvas{width:100%;height:100%;border-radius:14px;box-shadow:0 0 0 3px #1f4a3a,0 16px 40px rgba(0,0,0,.5);touch-action:none;display:block}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,16,14,.75);border-radius:14px}
+.panel{text-align:center;padding:16px}
+.panel h2{margin:0 0 6px;font-size:30px;color:#6ee7a8}
+.panel p{margin:6px 0;line-height:1.45}
+.panel button{margin-top:10px;border:none;border-radius:10px;background:#6ee7a8;color:#08281a;font:800 18px system-ui,sans-serif;padding:12px 26px;cursor:pointer}
+.hidden{display:none}
+.pad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,56px);gap:8px}
+.pad button{border:none;border-radius:12px;background:#1d3a32;color:#bff5d8;font-size:24px;touch-action:manipulation;cursor:pointer}
+.pad button:active{background:#2c5a4b}
+.pad .up{grid-column:2}.pad .l{grid-column:1;grid-row:2}.pad .d{grid-column:2;grid-row:2}.pad .r{grid-column:3;grid-row:2}
+.hint{font-size:12px;opacity:.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="https://jonniejett.github.io/">← Game Room</a><b>🐍 Snake</b><span></span></div>
+  <div class="scores"><div><b id="sc">0</b>Score</div><div><b id="hs">0</b>Best</div></div>
+  <div class="stage">
+    <canvas id="c" width="440" height="440"></canvas>
+    <div class="overlay" id="ov"><div class="panel" id="panel">
+      <h2>Snake</h2>
+      <p>Eat the 🍎 apples to grow longer.<br>Don't hit the walls or your own tail!</p>
+      <p>Swipe on the board, use the arrows below,<br>or use your keyboard.</p>
+      <button id="go">Start</button>
+    </div></div>
+  </div>
+  <div class="pad">
+    <button class="up" data-d="0,-1">▲</button>
+    <button class="l" data-d="-1,0">◀</button><button class="d" data-d="0,1">▼</button><button class="r" data-d="1,0">▶</button>
+  </div>
+  <div class="hint">Gets faster as you grow. 🌟 Golden apples are worth 5.</div>
+</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const N=20,S=cv.width/N;
+const store={get(k,d){try{const v=localStorage.getItem('sn_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('sn_'+k,JSON.stringify(v))}catch(e){}}};
+let best=store.get('best',0);hs.textContent=best;
+let snake,dir,queue,food,gold,score,state='menu',acc=0,last=0,stepMs,grow,flash=0;
+function reset(){snake=[{x:8,y:10},{x:7,y:10},{x:6,y:10}];dir={x:1,y:0};queue=[];score=0;grow=0;stepMs=140;gold=null;place();sc.textContent=0}
+function free(){let p;do{p={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)}}while(snake.some(s=>s.x===p.x&&s.y===p.y)||(food&&food.x===p.x&&food.y===p.y));return p}
+function place(){food=free()}
+function turn(dx,dy){if(state!=='play')return;const ref=queue.length?queue[queue.length-1]:dir;if(ref.x===-dx&&ref.y===-dy)return;if(ref.x===dx&&ref.y===dy)return;if(queue.length<3)queue.push({x:dx,y:dy})}
+function step(){
+  if(queue.length)dir=queue.shift();
+  const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(h.x<0||h.y<0||h.x>=N||h.y>=N||snake.slice(0,snake.length-(grow?0:1)).some(s=>s.x===h.x&&s.y===h.y))return die();
+  snake.unshift(h);
+  if(h.x===food.x&&h.y===food.y){score++;grow+=1;place();stepMs=Math.max(65,stepMs-3);if(!gold&&Math.random()<.18)gold={...free(),t:60}}
+  if(gold&&h.x===gold.x&&h.y===gold.y){score+=5;grow+=2;gold=null;flash=8}
+  if(grow>0)grow--;else snake.pop();
+  if(gold&&--gold.t<=0)gold=null;
+  sc.textContent=score;
+}
+function die(){state='over';const nb=score>best;if(nb){best=score;store.set('best',best);hs.textContent=best}
+  if(navigator.vibrate)try{navigator.vibrate(120)}catch(e){}
+  setTimeout(()=>{panel.innerHTML=`<h2>Game over</h2><p style="font-size:22px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><button id="go">Play again</button>`;ov.classList.remove('hidden');document.getElementById('go').onclick=begin},500)}
+function begin(){reset();state='play';ov.classList.add('hidden');acc=0}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function draw(){
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){ctx.fillStyle=(x+y)%2?'#16302a':'#193631';ctx.fillRect(x*S,y*S,S,S)}
+  if(flash>0){ctx.fillStyle=`rgba(255,215,80,${flash/40})`;ctx.fillRect(0,0,cv.width,cv.height);flash--}
+  ctx.font=(S*.85)+'px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('🍎',food.x*S+S/2,food.y*S+S/2+1);
+  if(gold&&(gold.t>15||gold.t%2))ctx.fillText('🌟',gold.x*S+S/2,gold.y*S+S/2+1);
+  snake.forEach((s,i)=>{const t=i/Math.max(1,snake.length-1);ctx.fillStyle=`hsl(${145-t*25},${70-t*15}%,${58-t*18}%)`;const p=i?2:1;rr(s.x*S+p,s.y*S+p,S-2*p,S-2*p,S*.32);ctx.fill()});
+  const h=snake[0];ctx.fillStyle='#0b1a14';const ex=dir.y!==0?S*.2:0,ey=dir.x!==0?S*.2:0,fx=dir.x*S*.15,fy=dir.y*S*.15;
+  ctx.beginPath();ctx.arc(h.x*S+S/2-ex+fx,h.y*S+S/2-ey+fy,S*.09,0,7);ctx.arc(h.x*S+S/2+ex+fx,h.y*S+S/2+ey+fy,S*.09,0,7);ctx.fill();
+}
+function loop(ts){const dt=last?ts-last:0;last=ts;if(state==='play'){acc+=dt;while(acc>=stepMs&&state==='play'){acc-=stepMs;step()}}draw();requestAnimationFrame(loop)}
+const ov=document.getElementById('ov'),panel=document.getElementById('panel');document.getElementById('go').onclick=begin;
+document.querySelectorAll('.pad button').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();const [x,y]=b.dataset.d.split(',').map(Number);turn(x,y)}));
+const K={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+document.addEventListener('keydown',e=>{if(K[e.key]){e.preventDefault();turn(...K[e.key])}else if((e.key===' '||e.key==='Enter')&&state!=='play')begin()});
+let tx=null,ty=null;
+cv.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;e.preventDefault()},{passive:false});
+cv.addEventListener('touchmove',e=>{if(tx===null)return;const dx=e.touches[0].clientX-tx,dy=e.touches[0].clientY-ty;if(Math.max(Math.abs(dx),Math.abs(dy))>22){if(Math.abs(dx)>Math.abs(dy))turn(Math.sign(dx),0);else turn(0,Math.sign(dy));tx=e.touches[0].clientX;ty=e.touches[0].clientY}e.preventDefault()},{passive:false});
+cv.addEventListener('touchend',()=>{tx=null});
+reset();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

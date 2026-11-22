@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Angry, Annoyed &amp; Amused Breakout – Jonnie's Game Room</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 20%,#1f1a1a,#0a0a0a 70%);color:#f2eee6;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none;overflow:hidden}
+.wrap{height:100%;display:flex;flex-direction:column;align-items:center;padding:6px}
+.top{width:100%;max-width:460px;display:flex;justify-content:space-between;align-items:center;padding:2px 4px 6px}
+.top a{color:#f0b84a;text-decoration:none;font-size:14px}
+.top b{font-size:15px;background:linear-gradient(90deg,#e8412f,#f0b84a,#69b83c);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stage{position:relative;flex:1;width:100%;display:flex;justify-content:center;min-height:0}
+canvas{height:100%;max-width:100%;aspect-ratio:9/14;border-radius:14px;box-shadow:0 0 0 3px #3a2a1a,0 0 30px rgba(232,65,47,.25);touch-action:none;background:#111}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.panel{pointer-events:auto;background:rgba(12,10,10,.92);border:2px solid #f0b84a;border-radius:16px;padding:20px;max-width:320px;text-align:center}
+.panel h2{margin:0 0 6px;font-size:26px;line-height:1.15}
+.panel h2 .r{color:#e8412f}.panel h2 .y{color:#f0b84a}.panel h2 .g{color:#69b83c}
+.panel p{margin:6px 0;line-height:1.45;font-size:15px}
+.panel button{margin-top:12px;border:none;border-radius:10px;background:#f0b84a;color:#2a1a00;font:800 18px system-ui,sans-serif;padding:12px 26px;cursor:pointer}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="https://jonniejett.github.io/">← Game Room</a><b>🧱 AA&amp;A Breakout</b><span id="hi">Best: 0</span></div>
+  <div class="stage">
+    <canvas id="c" width="360" height="560"></canvas>
+    <div class="overlay" id="ov"><div class="panel" id="panel">
+      <h2><span class="r">Angry,</span> <span class="y">Annoyed</span> &amp; <span class="g">Amused</span><br>Breakout</h2>
+      <p>Smash the bricks to uncover the podcast logo hiding behind them!</p>
+      <p>👆 Drag your finger to move the paddle.<br>⌨️ Or use the arrow keys / mouse.</p>
+      <p>You get 3 balls. Clear the wall to go to the next level.</p>
+      <button id="go">Start</button>
+    </div></div>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const W=360,H=560,COLS=10,ROWS=13,TOP=28,BW=W/COLS,BH=29,PW0=72;
+const logo=new Image();logo.src='logo.jpg?v=1';
+const ROWCOL=['#e8412f','#e8412f','#ec5a2b','#ee7429','#f08e2c','#f0a531','#f0b84a','#d9c043','#b5c13f','#8fbc3c','#69b83c','#4fa335','#3f8f2c'];
+const store={get(k,d){try{const v=localStorage.getItem('bo_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('bo_'+k,JSON.stringify(v))}catch(e){}}};
+let best=store.get('best',0);document.getElementById('hi').textContent='Best: '+best;
+
+let state='menu',bricks,paddle,ball,lives,score,level,parts,reveal,last,targetX=null,keys={};
+function newWall(){bricks=[];for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+  const tough=level>1&&(r<2||Math.random()<.08*level);
+  bricks.push({x:c*BW,y:TOP+r*BH,r,c,hp:tough?2:1,a:1,alive:true})}reveal=0}
+function newBall(){const sp=4.2+level*.5;const a=-Math.PI/2+(Math.random()-.5)*.8;ball={x:paddle.x,y:paddle.y-12,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:7,stuck:true,sp}}
+function startGame(){level=1;lives=3;score=0;parts=[];paddle={x:W/2,y:H-36,w:PW0};newWall();newBall();state='play';ov.classList.add('hidden')}
+function nextLevel(){level++;parts=[];paddle.w=Math.max(50,PW0-(level-1)*5);newWall();newBall();state='play';ov.classList.add('hidden')}
+
+function update(dt){
+  if(targetX!==null)paddle.x+=(targetX-paddle.x)*Math.min(1,.5*dt);
+  if(keys.ArrowLeft)paddle.x-=7*dt;if(keys.ArrowRight)paddle.x+=7*dt;
+  paddle.x=Math.max(paddle.w/2,Math.min(W-paddle.w/2,paddle.x));
+  for(const b of bricks)if(!b.alive&&b.a>0)b.a-=.06*dt;
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=.25*dt;p.l-=dt}parts=parts.filter(p=>p.l>0);
+  if(ball.stuck){ball.x=paddle.x;ball.y=paddle.y-12;return}
+  const steps=3;for(let s=0;s<steps;s++){
+    ball.x+=ball.vx*dt/steps;ball.y+=ball.vy*dt/steps;
+    if(ball.x<ball.r){ball.x=ball.r;ball.vx=Math.abs(ball.vx)}
+    if(ball.x>W-ball.r){ball.x=W-ball.r;ball.vx=-Math.abs(ball.vx)}
+    if(ball.y<ball.r){ball.y=ball.r;ball.vy=Math.abs(ball.vy)}
+    if(ball.vy>0&&ball.y+ball.r>=paddle.y-6&&ball.y<paddle.y+8&&Math.abs(ball.x-paddle.x)<paddle.w/2+ball.r){
+      const hit=(ball.x-paddle.x)/(paddle.w/2),ang=-Math.PI/2+hit*1.05;
+      ball.sp=Math.min(ball.sp+.04,9+level*.4);ball.vx=Math.cos(ang)*ball.sp;ball.vy=Math.sin(ang)*ball.sp;ball.y=paddle.y-6-ball.r}
+    for(const b of bricks){if(!b.alive)continue;
+      const nx=Math.max(b.x,Math.min(ball.x,b.x+BW)),ny=Math.max(b.y,Math.min(ball.y,b.y+BH));
+      const dx=ball.x-nx,dy=ball.y-ny;if(dx*dx+dy*dy<ball.r*ball.r){
+        const ox=Math.min(ball.x+ball.r-b.x,b.x+BW-(ball.x-ball.r)),oy=Math.min(ball.y+ball.r-b.y,b.y+BH-(ball.y-ball.r));
+        if(ox<oy)ball.vx*=-1;else ball.vy*=-1;
+        b.hp--;if(b.hp<=0){b.alive=false;score+=10*level;burst(b)}else score+=5;
+        break}}
+    if(ball.y>H+20){lives--;if(lives<=0){gameOver();return}newBall();return}
+  }
+  if(bricks.every(b=>!b.alive)){state='won';setTimeout(()=>showPanel(`<h2>Level ${level} cleared! 🎉</h2><p>You uncovered the whole logo!</p><p style="font-size:20px"><b>${score}</b> points</p><button id="go">Level ${level+1} ▶</button>`,nextLevel),1800)}
+}
+function burst(b){for(let i=0;i<7;i++)parts.push({x:b.x+BW/2,y:b.y+BH/2,vx:(Math.random()-.5)*5,vy:(Math.random()-.8)*4,l:30+Math.random()*20,c:ROWCOL[b.r]})}
+function gameOver(){state='over';const nb=score>best;if(nb){best=score;store.set('best',best);document.getElementById('hi').textContent='Best: '+best}
+  showPanel(`<h2>Game over</h2><p>You reached level ${level}.</p><p style="font-size:20px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><button id="go">Play again</button>`,startGame)}
+
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function draw(){
+  ctx.fillStyle='#0c0b0b';ctx.fillRect(0,0,W,H);
+  const lh=ROWS*BH;
+  if(logo.complete&&logo.naturalWidth){const s=Math.min(W/logo.naturalWidth,lh/logo.naturalHeight),w=logo.naturalWidth*s,h=logo.naturalHeight*s;
+    ctx.drawImage(logo,(W-w)/2,TOP+(lh-h)/2,w,h)}
+  for(const b of bricks){if(b.a<=0)continue;ctx.globalAlpha=b.alive?1:Math.max(0,b.a);
+    ctx.fillStyle=ROWCOL[b.r];rr(b.x+1.5,b.y+1.5,BW-3,BH-3,4);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.22)';ctx.fillRect(b.x+4,b.y+4,BW-8,4);
+    if(b.hp>1){ctx.strokeStyle='rgba(0,0,0,.55)';ctx.lineWidth=2;rr(b.x+4,b.y+4,BW-8,BH-8,3);ctx.stroke()}
+    ctx.globalAlpha=1}
+  for(const p of parts){ctx.globalAlpha=Math.min(1,p.l/20);ctx.fillStyle=p.c;ctx.fillRect(p.x-2,p.y-2,4,4)}ctx.globalAlpha=1;
+  const g=ctx.createLinearGradient(paddle.x-paddle.w/2,0,paddle.x+paddle.w/2,0);g.addColorStop(0,'#e8412f');g.addColorStop(.5,'#f0b84a');g.addColorStop(1,'#69b83c');
+  ctx.fillStyle=g;rr(paddle.x-paddle.w/2,paddle.y-6,paddle.w,12,6);ctx.fill();
+  ctx.fillStyle='#fff';ctx.shadowColor='#f0b84a';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#ddd';ctx.font='bold 14px system-ui,sans-serif';ctx.textBaseline='middle';ctx.textAlign='left';ctx.fillText('Score '+score,8,15);
+  ctx.textAlign='center';ctx.fillText('Level '+level,W/2,15);
+  ctx.textAlign='right';ctx.fillText('🎙️'.repeat(Math.max(0,lives)),W-8,15);
+  if(state==='play'&&ball.stuck){ctx.fillStyle='rgba(255,255,255,.85)';ctx.textAlign='center';ctx.font='bold 15px system-ui,sans-serif';ctx.fillText('Tap to launch',W/2,H-80)}
+}
+function loop(ts){const dt=last?Math.min((ts-last)/16.67,3):1;last=ts;if(state==='play')update(dt);if(bricks)draw();requestAnimationFrame(loop)}
+
+const ov=document.getElementById('ov'),panel=document.getElementById('panel');
+function showPanel(html,fn){panel.innerHTML=html;ov.classList.remove('hidden');document.getElementById('go').onclick=fn}
+document.getElementById('go').onclick=startGame;
+function toX(cx){const r=cv.getBoundingClientRect();return (cx-r.left)/r.width*W}
+function launch(){if(state==='play'&&ball.stuck)ball.stuck=false}
+cv.addEventListener('touchstart',e=>{targetX=toX(e.touches[0].clientX);launch();e.preventDefault()},{passive:false});
+cv.addEventListener('touchmove',e=>{targetX=toX(e.touches[0].clientX);e.preventDefault()},{passive:false});
+cv.addEventListener('mousemove',e=>{targetX=toX(e.clientX)});
+cv.addEventListener('mousedown',launch);
+document.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){targetX=null;e.preventDefault()}if(e.key===' '){launch();e.preventDefault()}});
+document.addEventListener('keyup',e=>{keys[e.key]=false});
+level=1;lives=3;score=0;parts=[];paddle={x:W/2,y:H-36,w:PW0};newWall();newBall();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
