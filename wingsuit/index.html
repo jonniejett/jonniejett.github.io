@@ -8,6 +8,8 @@
 <style>
 .panel h2 span{color:#ff8a2a}
 #speedfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(255,255,255,.08) 70%,rgba(255,255,255,.22) 100%);transition:opacity .2s}
+  .tapbtn{position:fixed;bottom:max(34px,calc(env(safe-area-inset-bottom) + 24px));width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-size:30px;color:#fff;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.3);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;pointer-events:none;transition:transform .08s,background .08s}
+.tapbtn.on{transform:scale(.9);background:rgba(255,138,42,.55);border-color:#ffb35c}
 #prox{position:fixed;left:50%;bottom:max(26px,env(safe-area-inset-bottom));transform:translateX(-50%);font-weight:900;font-size:20px;color:#ffb35c;text-shadow:0 2px 10px #000;opacity:0;transition:opacity .2s;z-index:5;pointer-events:none}
 </style>
 <script type="importmap">{"imports":{"three":"../lib/three/three.module.js","three/addons/":"../lib/three/addons/"}}</script>
@@ -22,14 +24,15 @@
 </div>
 <div class="center"><b id="score">0</b><small id="best">Best 0</small></div>
 <div id="prox">🔥 PROXIMITY ×2</div>
+<div id="tapL" class="tapbtn" style="left:max(14px,env(safe-area-inset-left))">◀</div><div id="tapR" class="tapbtn" style="right:max(14px,env(safe-area-inset-right))">▶</div>
 <div id="tiltHint" style="position:fixed;left:0;right:0;bottom:max(6px,env(safe-area-inset-bottom));text-align:center;font-size:12px;opacity:.65;z-index:5;pointer-events:none;text-shadow:0 1px 4px #000"></div>
 <div class="banner" id="banner"></div>
 <div class="overlay" id="ov"><div class="panel" id="panel">
   <h2>Bear Mountain <span>Wingsuit</span></h2>
   <p>Jump off the top of Bear Mountain and fly the valleys of Harriman State Park in a wingsuit.</p>
-  <p>📱 <b>Tilt your phone to fly:</b><br>lean left/right to turn · tip the top away from you to dive (go faster) · tip it back toward you to pull up.</p>
-  <p style="font-size:13px;opacity:.8">Hold the phone the way that's comfy when you tap Jump, and that becomes "level". Tap the screen any time to re-center. If asked, tap <b>Allow</b> for motion access.</p>
-  <p>💫 Fly through <b>rings</b> for points and speed. Fly <b>close to the ground</b> for double points, but don't crash!</p>
+  <p>👈 <b>Hold the left side</b> of the screen to turn left.<br>👉 <b>Hold the right side</b> to turn right.<br>✌️ <b>Hold both sides</b> to dive low and fast.</p>
+  <p style="font-size:13px;opacity:.8">The wingsuit keeps you at a safe height on its own, so just steer!</p>
+  <p>💫 Steer through <b>rings</b> for points and speed. Diving close to the ground gives double points, but don't hit a hill!</p>
   <button id="go">Jump! 🪂</button>
 </div></div>
 
@@ -127,10 +130,13 @@ function crash(){state='crash';crashT=0;vibrate(300);
 
 const camPos=new THREE.Vector3(),tmp=new THREE.Vector3();
 function update(dt){const t=performance.now()/1000;
-  let jx=tiltOn?tilt.x:joy.x,jy=tiltOn?tilt.y:-joy.y;if(keys.ArrowLeft)jx=-1;if(keys.ArrowRight)jx=1;if(keys.ArrowUp)jy=1;if(keys.ArrowDown)jy=-1;
+  let jx=tapX,jy=0;if(keys.ArrowLeft)jx=-1;if(keys.ArrowRight)jx=1;const diving=(tapBoth||keys.ArrowDown||keys[' '])&&state==='play';
   if(state==='play'){
-    const pT=.16+jy*.62;pitch+=(pT-pitch)*Math.min(1,dt*2.6);
-    const bT=-jx*.95;bank+=(bT-bank)*Math.min(1,dt*3.5);heading-=jx*dt*.75;
+    // auto-pilot height: look ahead for hills and hold a safe height (lower when diving)
+    const fx_=-Math.sin(heading),fz_=-Math.cos(heading);let gMax=H(p.x,p.z);for(const d of[25,50,80,120]){gMax=Math.max(gMax,H(p.x+fx_*d,p.z+fz_*d)-d*.12)}
+    const target=diving?8.5:30,err=(p.y-gMax)-target;
+    const pT=THREE.MathUtils.clamp(.12+err*.025,-.55,diving?.7:.45);pitch+=(pT-pitch)*Math.min(1,dt*2.4);
+    const bT=-jx*.95;bank+=(bT-bank)*Math.min(1,dt*3.5);const vH=Math.atan((pathX(p.z-1)-pathX(p.z+1))/-2);const hT=vH-jx*.7;heading+=(hT-heading)*Math.min(1,dt*1.8);
     const acc=9.8*Math.sin(pitch)*2.3-(speed-36)*.32;speed=THREE.MathUtils.clamp(speed+acc*dt,24,125);
     const vy=-speed*Math.sin(pitch)*.92-3+Math.max(0,speed-62)*.06;
     vel.set(-Math.sin(heading)*speed*Math.cos(pitch),vy,-Math.cos(heading)*speed*Math.cos(pitch));p.addScaledVector(vel,dt);
@@ -171,7 +177,7 @@ function update(dt){const t=performance.now()/1000;
   $('score').textContent=score;
 }
 function loop(ts){const dt=Math.min(.05,lastT?(ts-lastT)/1000:.016);lastT=ts;update(dt);render(dt);requestAnimationFrame(loop)}
-function begin(){if(!tiltTried)enableTilt();needCal=true;reset();flyer.rotation.set(0,0,0);state='play';$('ov').classList.add('hidden');banner($('banner'),'🪂 GO!',900)}
+function begin(){reset();flyer.rotation.set(0,0,0);state='play';$('ov').classList.add('hidden');banner($('banner'),'🪂 GO!',900)}
 $('go').onclick=begin;
 
 // ---------- tilt controls ----------
@@ -189,12 +195,19 @@ function enableTilt(){tiltTried=true;if(typeof DeviceOrientationEvent==='undefin
   if(typeof DeviceOrientationEvent.requestPermission==='function'){DeviceOrientationEvent.requestPermission().then(r=>{if(r==='granted')go();else fallbackHint()}).catch(fallbackHint)}else go()}
 function fallbackHint(){if(!tiltOn)$('tiltHint').textContent='No tilt sensor found, so drag anywhere to fly (up = dive, down = climb)'}
 addEventListener('orientationchange',()=>{needCal=true});if(screen.orientation)screen.orientation.addEventListener('change',()=>{needCal=true});
-$('c').addEventListener('touchstart',e=>{if(tiltOn&&state==='play'){needCal=true;banner($('banner'),'↺ Re-centered',700)}e.preventDefault()},{passive:false});
+
 
 const zone=document.createElement('div');Object.assign(zone.style,{position:'fixed',inset:0,zIndex:3,touchAction:'none'});document.body.appendChild(zone);
-const joy=joystick(zone,{radius:70});
-let md=false,mx=0,my=0;zone.addEventListener('mousedown',e=>{md=true;mx=e.clientX;my=e.clientY});addEventListener('mousemove',e=>{if(md){joy.x=THREE.MathUtils.clamp((e.clientX-mx)/70,-1,1);joy.y=THREE.MathUtils.clamp((e.clientY-my)/70,-1,1)}});addEventListener('mouseup',()=>{md=false;joy.x=joy.y=0});
-const keys={};addEventListener('keydown',e=>{keys[e.key]=1;if(e.key.startsWith('Arrow'))e.preventDefault();if((e.key===' '||e.key==='Enter')&&state!=='play'&&!$('ov').classList.contains('hidden'))begin()});addEventListener('keyup',e=>{keys[e.key]=0});
+const joy={x:0,y:0};
+let tapX=0,tapBoth=false;const touches=new Map();
+function refreshTap(){let l=false,r=false;for(const x of touches.values()){if(x<innerWidth/2)l=true;else r=true}
+  if(keys.ArrowLeft)l=true;if(keys.ArrowRight)r=true;
+  tapBoth=l&&r;tapX=tapBoth?0:(r?1:0)-(l?1:0);$('tapL').classList.toggle('on',l);$('tapR').classList.toggle('on',r)}
+zone.addEventListener('touchstart',e=>{for(const t of e.changedTouches)touches.set(t.identifier,t.clientX);refreshTap();e.preventDefault()},{passive:false});
+zone.addEventListener('touchmove',e=>{for(const t of e.changedTouches)touches.set(t.identifier,t.clientX);refreshTap();e.preventDefault()},{passive:false});
+const tEnd=e=>{for(const t of e.changedTouches)touches.delete(t.identifier);refreshTap()};zone.addEventListener('touchend',tEnd);zone.addEventListener('touchcancel',tEnd);
+zone.addEventListener('mousedown',e=>{touches.set('m',e.clientX);refreshTap()});addEventListener('mouseup',()=>{touches.delete('m');refreshTap()});
+const keys={};addEventListener('keydown',e=>{keys[e.key]=1;refreshTap();if(e.key.startsWith('Arrow'))e.preventDefault();if((e.key===' '||e.key==='Enter')&&state!=='play'&&!$('ov').classList.contains('hidden'))begin()});addEventListener('keyup',e=>{keys[e.key]=0;refreshTap()});
 
 window.__fx2={scene,clouds,trail,sky,renderer};window.__ws={get state(){return state},p,H,get speed(){return speed}};
 reset();$('loading').remove();requestAnimationFrame(loop);
