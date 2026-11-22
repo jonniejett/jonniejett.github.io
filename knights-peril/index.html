@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Knight's Peril – Jonnie's Game Room</title>
+<link rel="stylesheet" href="../lib/game-shell.css">
+<style>
+.panel h2 span{color:#ffb84a}
+#pad{position:fixed;left:0;right:0;bottom:0;padding:8px max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:flex;justify-content:space-between;align-items:center;z-index:6;pointer-events:none;background:linear-gradient(0deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
+.cross{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,58px);gap:6px;pointer-events:auto}
+.btn{width:64px;height:58px;border-radius:16px;display:grid;place-items:center;color:#fff;font:800 24px system-ui;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .06s}
+.btn.on{transform:scale(.9);background:rgba(255,184,74,.5)}
+.btn.hint{animation:pulse .3s infinite alternate;border-color:#ffd96a;box-shadow:0 0 18px #ffb84a}
+@keyframes pulse{to{background:rgba(255,184,74,.55)}}
+.btn.sword{width:96px;height:96px;border-radius:50%;font-size:40px;pointer-events:auto;background:rgba(255,184,74,.22);border-color:#ffcf7a}
+.cross .u{grid-column:2;grid-row:1}.cross .l{grid-column:1;grid-row:2}.cross .d{grid-column:2;grid-row:2}.cross .r{grid-column:3;grid-row:2}
+#prompt{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%) scale(.6);width:120px;height:120px;border-radius:50%;display:grid;place-items:center;font-size:58px;z-index:7;opacity:0;pointer-events:none;transition:transform .12s,opacity .12s;
+  background:radial-gradient(circle,rgba(20,10,0,.75) 58%,transparent 60%),conic-gradient(#ffcf4a var(--p,100%),rgba(255,255,255,.15) 0);filter:drop-shadow(0 0 18px #ffae2a)}
+#prompt.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#prompt.good{filter:drop-shadow(0 0 22px #5dff8a)}#prompt.bad{filter:drop-shadow(0 0 22px #ff3b3b)}
+#roomName{position:fixed;left:50%;top:22%;transform:translateX(-50%);text-align:center;z-index:6;pointer-events:none;opacity:0;transition:opacity .4s;font-family:Georgia,"Times New Roman",serif;text-shadow:0 3px 14px #000}
+#roomName small{display:block;font:700 12px system-ui;letter-spacing:.3em;color:#ffcf7a}
+#roomName b{font-size:34px;color:#fff3d6}
+#roomName.show{opacity:1}
+@media (max-height:700px){.cross{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(2,48px)}.btn{width:54px;height:48px;font-size:20px}.btn.sword{width:80px;height:80px;font-size:32px}}
+</style>
+<script type="importmap">{"imports":{"three":"../lib/three/three.module.js","three/addons/":"../lib/three/addons/"}}</script>
+</head>
+<body>
+<div id="loading">Lowering the drawbridge…</div>
+<canvas id="c"></canvas>
+<div class="hud">
+  <a href="https://jonniejett.github.io/">← Game Room</a>
+  <div class="col"><div class="box"><b id="room">1/10</b><small>room</small></div><div class="box"><b id="lives">🛡️🛡️🛡️🛡️🛡️</b><small>lives</small></div></div>
+</div>
+<div class="center"><b id="score">0</b><small id="best">Best 0</small></div>
+<div id="roomName"><small id="roomNum">ROOM 1</small><b id="roomTitle">The Drawbridge</b></div>
+<div id="prompt">⬆️</div>
+<div id="pad">
+  <div class="cross"><div class="btn u" id="bU">▲</div><div class="btn l" id="bL">◀</div><div class="btn d" id="bD">▼</div><div class="btn r" id="bR">▶</div></div>
+  <div class="btn sword" id="bS">⚔️</div>
+</div>
+<div class="banner" id="banner"></div>
+<div class="overlay" id="ov"><div class="panel" id="panel">
+  <h2>Knight's <span>Peril</span></h2>
+  <p>The emerald dragon <b>Cindermaw</b> has locked old wizard <b>Bram</b> in a cage deep inside Blackthorn Keep. Guide <b>Sir Rowan</b> through 10 deadly rooms to set him free!</p>
+  <p>⚡ When danger strikes, a <b>glowing icon</b> flashes. Hit that move before the ring runs out:</p>
+  <p>▲ jump · ▼ duck · ◀ back off · ▶ dash ahead · ⚔️ swing your sword</p>
+  <p style="font-size:13px;opacity:.85">Swipe works too, and tapping the screen swings the sword. Wrong move or too slow? Sir Rowan meets a silly end and tries again. You have 5 lives.</p>
+  <button id="go">Enter the Keep 🗡️</button>
+</div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { makeRenderer, makeStore, canvasTex, softTex, std, box, shadowAll, banner, vibrate } from '../lib/fx.js';
+
+const $=id=>document.getElementById(id);
+const store=makeStore('kp_');let best=store.get('best',0);$('best').textContent='Best '+best;
+const {renderer,scene,camera,render}=makeRenderer($('c'),{bloom:.6,radius:.5,threshold:1.0,exposure:1.05});
+scene.background=new THREE.Color(0x07050a);scene.fog=new THREE.Fog(0x07050a,24,60);
+
+// ---------- sound ----------
+let ac=null;function audio(){if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(ac&&ac.state==='suspended')ac.resume()}
+function tn(f0,f1,d,v=.08,type='square'){if(!ac)return;const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f0,ac.currentTime);o.frequency.exponentialRampToValueAtTime(f1,ac.currentTime+d);g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}
+function nz(d,f,v,type='lowpass'){if(!ac)return;const n=ac.createBufferSource(),b=ac.createBuffer(1,ac.sampleRate*d,ac.sampleRate),a=b.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=(Math.random()*2-1)*(1-i/a.length);n.buffer=b;const fl=ac.createBiquadFilter();fl.type=type;fl.frequency.value=f;const g=ac.createGain();g.gain.value=v;n.connect(fl);fl.connect(g);g.connect(ac.destination);n.start()}
+const S={cue:()=>tn(1200,1600,.08,.06,'triangle'),good:()=>{tn(660,990,.1,.07,'triangle');setTimeout(()=>tn(990,1320,.12,.07,'triangle'),80)},clang:()=>{tn(1800,900,.2,.06,'triangle');nz(.1,4000,.15,'highpass')},whoosh:()=>nz(.3,1500,.2,'bandpass'),
+  yell:()=>{tn(700,140,.9,.09,'sawtooth')},crash:()=>nz(.6,500,.45),roar:()=>{nz(1.2,260,.5);tn(110,60,1.1,.12,'sawtooth')},fire:()=>nz(1,900,.3,'bandpass'),bones:()=>[1,2,3,4].forEach(i=>setTimeout(()=>tn(400+Math.random()*600,200,.05,.06,'square'),i*50)),
+  fanfare:()=>[523,659,784,1047,784,1047].forEach((f,i)=>setTimeout(()=>tn(f,f,.18,.08,'triangle'),i*130))};
+
+// ---------- castle corridor ----------
+const stoneT=canvasTex(256,256,(g,w,h)=>{g.fillStyle='#4a4450';g.fillRect(0,0,w,h);for(let y=0;y<h;y+=32)for(let x=(y/32)%2*32;x<w+64;x+=64){const v=60+Math.random()*30|0;g.fillStyle=`rgb(${v},${v-6},${v+6})`;g.fillRect(x-62,y+2,60,28)}g.fillStyle='rgba(0,0,0,.25)';for(let i=0;i<300;i++)g.fillRect(Math.random()*w,Math.random()*h,2,2)},{repeat:[8,2]});
+const floorT=canvasTex(128,128,(g,w,h)=>{g.fillStyle='#3a3238';g.fillRect(0,0,w,h);g.strokeStyle='#221c22';g.lineWidth=4;g.strokeRect(2,2,w-4,h-4);for(let i=0;i<200;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*.2})`;g.fillRect(Math.random()*w,Math.random()*h,3,3)}});
+const flameT=softTex('rgba(255,240,190,1)','rgba(255,80,0,0)'),glowT=softTex();
+let roomG=new THREE.Group();scene.add(roomG);
+let tiles=[],torches=[];
+const THEMES=[{wall:0x8a8090,torch:0xffa040,fog:0x0a0608},{wall:0x7a8a9a,torch:0x9fd0ff,fog:0x06080c},{wall:0x6a8a7a,torch:0x60ffb0,fog:0x040a08},{wall:0x9a8a70,torch:0xffb050,fog:0x0a0806},{wall:0xa07060,torch:0xff6020,fog:0x100604},{wall:0x8a5048,torch:0xff4020,fog:0x140404},{wall:0x7a8a5a,torch:0xd0ff60,fog:0x080a04},{wall:0x8a8aa0,torch:0xb0a0ff,fog:0x06060c},{wall:0xb09a60,torch:0xffd060,fog:0x0c0a04},{wall:0x7a4a6a,torch:0xff40a0,fog:0x10040c}];
+function buildRoom(len,th,opts={}){scene.remove(roomG);roomG=new THREE.Group();scene.add(roomG);tiles=[];torches=[];
+  const wm=new THREE.MeshStandardMaterial({map:stoneT,color:th.wall,roughness:.9});
+  const wall=new THREE.Mesh(new THREE.PlaneGeometry(len+30,10),wm);wall.position.set(len/2,4,-2.5);wall.receiveShadow=true;roomG.add(wall);
+  const ceil=box(len+30,.6,6,new THREE.MeshStandardMaterial({map:stoneT,color:th.wall,roughness:.9}),len/2,7.3,0);roomG.add(ceil);
+  const fm=new THREE.MeshStandardMaterial({map:floorT,color:0xbbb0b8,roughness:.6,metalness:.1});
+  if(!opts.bridge){for(let x=-14;x<len+14;x+=2){const t=box(2,.6,5,fm,x+1,-.3,0);t.receiveShadow=true;roomG.add(t);tiles.push(t)}}
+  else{const lava=new THREE.Mesh(new THREE.PlaneGeometry(len+40,14),new THREE.MeshBasicMaterial({color:0xff5a10}));lava.rotation.x=-Math.PI/2;lava.position.set(len/2,-5,0);roomG.add(lava);roomG.userData.lava=lava;
+    const lg=new THREE.PointLight(0xff5010,40,20,1.4);lg.position.set(len/2,-2,2);roomG.add(lg);
+    for(let x=-14;x<len+14;x+=2){const t=box(2,.4,1.6,std(0x5a3a22,{roughness:.8}),x+1,-.2,0);t.receiveShadow=true;roomG.add(t);tiles.push(t)}
+    for(const x of[-12,len+12]){roomG.add(box(6,8,5,new THREE.MeshStandardMaterial({map:stoneT,color:th.wall}),x,-3.5,0))}}
+  // pillars, banners, torches
+  for(let x=-6;x<len+8;x+=8){roomG.add(shadowAll(box(1,7,1,new THREE.MeshStandardMaterial({map:stoneT,color:th.wall}),x,3.5,-2)));
+    const tg=new THREE.Group();tg.add(box(.2,.8,.2,std(0x3a2a1a),0,0,0));const f=new THREE.Sprite(new THREE.SpriteMaterial({map:flameT,color:th.torch,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));f.position.y=.7;f.scale.set(.9,1.4,1);tg.add(f);
+    const pl=new THREE.PointLight(th.torch,22,14,1.3);pl.position.set(0,.8,.8);tg.add(pl);tg.position.set(x+4,4,-2.2);roomG.add(tg);torches.push({f,pl})}
+  for(let x=0;x<len;x+=16){const bn=box(1.4,2.6,.05,std([0x8a1020,0x1a3a8a,0x2a6a2a][Math.floor(x/16)%3],{roughness:.8}),x+8,4.8,-2.4);roomG.add(bn)}
+  // exit door
+  const door=new THREE.Group();door.add(box(3.2,4.6,.4,std(0x2a1a10),0,2.3,0));const leaf=box(2.6,4,.2,std(0x6a4a2a,{roughness:.7}),0,2,.2);door.add(leaf);for(const y of[1,3])door.add(box(2.6,.2,.25,std(0x333,{metalness:.5}),0,y,.25));door.position.set(len+4,0,-2.2);roomG.add(door);roomG.userData.leaf=leaf;
+  scene.fog.color.setHex(th.fog);scene.background.setHex(th.fog);
+  roomG.add(new THREE.HemisphereLight(0xb8a8d0,0x403030,1.7))}
+const sun=new THREE.DirectionalLight(0xffe0c0,1.5);sun.position.set(4,12,10);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-14,right:14,top:12,bottom:-6,near:1,far:40});scene.add(sun,sun.target);
+
+// ---------- Sir Rowan (original knight) ----------
+function makeKnight(){const root=new THREE.Group(),g=new THREE.Group();root.add(g);
+  const steel=std(0xc8ccd4,{metalness:.45,roughness:.3}),dark=std(0x3a3e48,{metalness:.4,roughness:.4}),teal=std(0x1a8a8a,{roughness:.7,side:THREE.DoubleSide}),gold=std(0xd8a838,{metalness:.5,roughness:.3});
+  const hip=new THREE.Group();hip.position.y=1;g.add(hip);const legs=[];
+  for(const s of[-1,1]){const l=new THREE.Group();l.position.z=s*.17;l.add(box(.24,.95,.26,steel,0,-.48,0));l.add(box(.3,.14,.34,dark,.05,-.95,0));hip.add(l);legs.push(l)}
+  const torso=new THREE.Group();torso.position.y=1;g.add(torso);
+  torso.add(new THREE.Mesh(new THREE.CylinderGeometry(.32,.36,.9,12),steel).translateY(.45));torso.add(box(.7,.12,.74,gold,0,.05,0));
+  const head=new THREE.Group();head.position.y=1.15;torso.add(head);head.add(new THREE.Mesh(new THREE.SphereGeometry(.26,16,12),steel));head.add(box(.1,.06,.3,dark,.22,0,0));
+  const plume=new THREE.Mesh(new THREE.ConeGeometry(.1,.5,8),std(0xff7a1a));plume.position.set(-.1,.36,0);plume.rotation.z=.6;head.add(plume);
+  const cape=new THREE.Mesh(new THREE.PlaneGeometry(.75,1.25,4,6),teal);cape.position.set(-.34,.35,0);cape.rotation.y=Math.PI/2;torso.add(cape);
+  // sword arm (front, +z side) and shield arm
+  const armS=new THREE.Group();armS.position.set(0,.8,.42);torso.add(armS);armS.add(box(.16,.55,.16,steel,0,-.27,0));
+  const sword=new THREE.Group();sword.position.set(0,-.55,0);armS.add(sword);sword.add(box(.08,.08,.3,gold,0,0,0));
+  const blade=box(.08,1.2,.04,new THREE.MeshStandardMaterial({color:0xe8f0ff,metalness:.5,roughness:.2,emissive:0x2040a0,emissiveIntensity:.2}),0,.6,0);sword.add(blade);sword.rotation.z=-1.2;
+  const armH=new THREE.Group();armH.position.set(0,.8,-.42);torso.add(armH);armH.add(box(.16,.55,.16,steel,0,-.27,0));
+  const shT=canvasTex(128,160,(c,w,h)=>{c.fillStyle='#1a6a6a';c.beginPath();c.moveTo(8,8);c.lineTo(w-8,8);c.lineTo(w-8,h*.55);c.quadraticCurveTo(w/2,h,w/2,h-4);c.quadraticCurveTo(w/2,h,8,h*.55);c.closePath();c.fill();c.strokeStyle='#d8a838';c.lineWidth=8;c.stroke();c.fillStyle='#d8a838';c.fillRect(w/2-14,40,28,56);c.fillRect(w/2-24,36,48,10)});
+  const shield=new THREE.Mesh(new THREE.PlaneGeometry(.7,.88),new THREE.MeshStandardMaterial({map:shT,transparent:true,side:THREE.DoubleSide,roughness:.5}));shield.position.set(.05,-.35,-.1);shield.rotation.y=Math.PI;armH.add(shield);
+  root.userData={g,legs,torso,head,cape,armS,sword,blade,armH};shadowAll(root,true,false);root.rotation.y=-Math.PI/2;return root}
+const K=makeKnight();scene.add(K);
+const kb=K.userData;
+function pose(name,t){const u=kb;u.g.position.set(0,0,0);u.g.rotation.set(0,0,0);u.g.scale.set(1,1,1);u.torso.rotation.set(0,0,0);u.torso.position.y=1;u.legs.forEach(l=>l.rotation.set(0,0,0));u.armS.rotation.set(0,0,0);u.armH.rotation.set(0,0,0);u.head.rotation.set(0,0,0);
+  const run=Math.sin(t*14);
+  if(name==='run'){u.legs[0].rotation.z=run*.7;u.legs[1].rotation.z=-run*.7;u.armS.rotation.z=-run*.4;u.armH.rotation.z=run*.4;u.g.position.y=Math.abs(run)*.06;u.torso.rotation.z=-.1}
+  else if(name==='idle'){u.g.position.y=Math.sin(t*2)*.02}
+  else if(name==='jump'){u.legs[0].rotation.z=.8;u.legs[1].rotation.z=-.3;u.armS.rotation.z=-1;u.armH.rotation.z=.6;u.torso.rotation.z=-.2}
+  else if(name==='duck'){u.g.scale.y=.6;u.torso.rotation.z=-.6;u.legs[0].rotation.z=1;u.legs[1].rotation.z=-.4;u.armH.rotation.z=-1}
+  else if(name==='slash'){const k=Math.min(1,t*3);u.armS.rotation.z=-2.4+k*3.2;u.torso.rotation.z=-.2+k*.3;u.legs[0].rotation.z=.4;u.legs[1].rotation.z=-.3}
+  else if(name==='back'){u.torso.rotation.z=.25;u.legs[0].rotation.z=-.5;u.armH.rotation.z=-.8}
+  else if(name==='lean'){u.torso.rotation.x=t;u.armS.rotation.x=t*2;u.armH.rotation.x=t*2}
+  else if(name==='flail'){u.armS.rotation.z=Math.sin(t*30)*1.5-1;u.armH.rotation.z=Math.cos(t*30)*1.5+1;u.legs[0].rotation.z=Math.sin(t*25);u.legs[1].rotation.z=-Math.sin(t*25)}
+  else if(name==='flat'){u.g.scale.set(1.5,.12,1.5)}
+  else if(name==='burnt'){u.g.position.y=0}
+  else if(name==='knocked'){u.g.rotation.z=1.4;u.g.position.y=.3}
+  kb.cape.rotation.x=Math.sin(t*6)*.15}
+const burntM=std(0x111111,{roughness:1});const origMats=new Map();K.traverse(o=>{if(o.isMesh)origMats.set(o,o.material)});
+function burn(on){K.traverse(o=>{if(o.isMesh)o.material=on?burntM:origMats.get(o)})}
+
+// ---------- props / enemies ----------
+const boneM=std(0xe8e2cc,{roughness:.7}),eyeM=new THREE.MeshStandardMaterial({color:0x100,emissive:0x40ff80,emissiveIntensity:4});
+function makeSkeleton(){const g=new THREE.Group();const s=new THREE.Mesh(new THREE.SphereGeometry(.26,12,10),boneM);s.position.y=1.95;g.add(s);for(const z of[-.09,.09]){const e=new THREE.Mesh(new THREE.SphereGeometry(.06,8,6),eyeM);e.position.set(-.2,1.97,z);g.add(e)}
+  g.add(box(.08,.7,.08,boneM,0,1.4,0));for(let i=0;i<4;i++)g.add(box(.08,.05,.5,boneM,-.02,1.62-i*.12,0));g.add(box(.3,.1,.4,boneM,0,1.02,0));
+  for(const z of[-.15,.15]){g.add(box(.06,.95,.06,boneM,0,.5,z))}const arm=new THREE.Group();arm.position.set(0,1.65,.28);arm.add(box(.06,.7,.06,boneM,0,-.35,0));arm.rotation.z=1.2;g.add(arm);const arm2=arm.clone();arm2.position.z=-.28;g.add(arm2);
+  g.userData={arm,arm2};g.rotation.y=Math.PI;return shadowAll(g,true,false)}
+function makeGoblin(){const g=new THREE.Group(),sk=std(0x5a9a3a,{roughness:.7});const b=new THREE.Mesh(new THREE.SphereGeometry(.45,12,10),std(0x6a4a2a));b.scale.y=1.1;b.position.y=.8;g.add(b);const h=new THREE.Mesh(new THREE.SphereGeometry(.36,12,10),sk);h.position.y=1.5;g.add(h);
+  for(const z of[-1,1]){const e=new THREE.Mesh(new THREE.ConeGeometry(.12,.5,6),sk);e.position.set(0,1.62,z*.38);e.rotation.x=z*1.2;g.add(e);const ey=new THREE.Mesh(new THREE.SphereGeometry(.07,8,6),new THREE.MeshStandardMaterial({color:0x110,emissive:0xffe040,emissiveIntensity:3}));ey.position.set(-.3,1.56,z*.13);g.add(ey)}
+  const cl=new THREE.Group();cl.position.set(0,1.1,.5);cl.add(box(.08,.6,.08,std(0x3a2a1a),0,.2,0));cl.add(box(.06,.35,.4,std(0xbcc0c8,{metalness:.5}),0,.55,.12));g.add(cl);for(const z of[-.2,.2])g.add(box(.18,.5,.2,sk,0,.25,z));
+  g.userData={cl};return shadowAll(g,true,false)}
+function makeBlade(){const g=new THREE.Group();g.add(box(.08,4.2,.08,std(0x555,{metalness:.5}),0,-2.1,0));const bl=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,.08,24,1,false,Math.PI*.15,Math.PI*.7),new THREE.MeshStandardMaterial({color:0xd8dde4,metalness:.6,roughness:.2}));bl.rotation.x=Math.PI/2;bl.position.y=-4.2;g.add(bl);return shadowAll(g,true,false)}
+function makeBoulder(){const m=new THREE.Mesh(new THREE.DodecahedronGeometry(1.2,1),std(0x7a7068,{flatShading:true,roughness:1}));m.castShadow=true;return m}
+function makeSpikes(w){const g=new THREE.Group();g.add(box(w,.4,3,std(0x3a3238),0,0,0));for(let x=-w/2+.3;x<w/2;x+=.5)for(const z of[-1,0,1]){const s=new THREE.Mesh(new THREE.ConeGeometry(.15,.6,6),std(0xaab0b8,{metalness:.5}));s.rotation.x=Math.PI;s.position.set(x,-.5,z*.8);g.add(s)}return shadowAll(g,true,false)}
+function makeBats(){const g=new THREE.Group();const bm=std(0x1a1218);for(let i=0;i<9;i++){const b=new THREE.Group();b.add(new THREE.Mesh(new THREE.SphereGeometry(.14,8,6),bm));for(const s of[-1,1]){const w=box(.05,.03,.45,bm,0,0,s*.25);b.add(w)}const e=new THREE.Mesh(new THREE.SphereGeometry(.04,6,4),new THREE.MeshStandardMaterial({emissive:0xff2020,emissiveIntensity:4}));e.position.x=-.12;b.add(e);b.position.set(Math.random()*2,Math.random()*1.6,(Math.random()-.5)*2);b.userData.ph=Math.random()*6;g.add(b)}return g}
+function makeArrows(){const g=new THREE.Group();for(let i=0;i<5;i++){const a=new THREE.Group();a.add(box(1,.04,.04,std(0x6a4a2a),0,0,0));const tip=new THREE.Mesh(new THREE.ConeGeometry(.07,.25,6),std(0x999,{metalness:.5}));tip.rotation.z=Math.PI/2;tip.position.x=-.6;a.add(tip);a.add(box(.2,.12,.02,std(0xc8102e),.45,0,0));a.position.set(i*.9,1.5+(i%2)*.25,(i%3-1)*.4);g.add(a)}return g}
+const fireParts=[];function flames(x,y,z,dir,spread,n=4,col){for(let i=0;i<n;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:flameT,color:col||0xffffff,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));s.position.set(x,y,z);scene.add(s);fireParts.push({s,vx:dir*(7+Math.random()*4),vy:(Math.random()-.5)*spread,vz:(Math.random()-.5)*spread,l:.7+Math.random()*.3,max:1})}}
+const smokeParts=[];function smoke(x,y,n=8){for(let i=0;i<n;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowT,color:0x333333,transparent:true,depthWrite:false,opacity:.6}));s.position.set(x+(Math.random()-.5)*.6,y,(Math.random()-.5)*.6);scene.add(s);smokeParts.push({s,l:1.4})}}
+
+// Wizard Bram in a cage + Cindermaw the dragon (final room)
+function makeWizard(){const g=new THREE.Group();const robe=new THREE.Mesh(new THREE.ConeGeometry(.5,1.6,12),std(0x2a3a9a));robe.position.y=.8;g.add(robe);const h=new THREE.Mesh(new THREE.SphereGeometry(.22,12,10),std(0xe0b090));h.position.y=1.75;g.add(h);
+  const beard=new THREE.Mesh(new THREE.ConeGeometry(.18,.6,10),std(0xf2f2f2));beard.rotation.x=Math.PI;beard.position.set(.12,1.45,0);g.add(beard);const hat=new THREE.Mesh(new THREE.ConeGeometry(.3,.8,12),std(0x2a3a9a));hat.position.y=2.2;hat.rotation.z=.2;g.add(hat);
+  for(let i=0;i<5;i++){const st=new THREE.Mesh(new THREE.OctahedronGeometry(.05),new THREE.MeshStandardMaterial({emissive:0xffe060,emissiveIntensity:3}));st.position.set((Math.random()-.5)*.6,.6+Math.random()*1.4,.42);g.add(st)}return shadowAll(g)}
+function makeCage(){const g=new THREE.Group(),bm=std(0x3a3a40,{metalness:.5,roughness:.4});for(let i=0;i<10;i++){const a=i/10*Math.PI*2;g.add(box(.06,2.6,.06,bm,Math.cos(a)*.9,1.3,Math.sin(a)*.9))}g.add(new THREE.Mesh(new THREE.CylinderGeometry(1,1,.12,16),bm).translateY(2.6));g.add(new THREE.Mesh(new THREE.CylinderGeometry(1,1,.12,16),bm));g.add(box(.05,3,.05,bm,0,4.1,0));return g}
+function makeDragon(){const g=new THREE.Group(),sc=std(0x1a7a4a,{roughness:.5,metalness:.15}),bel=std(0xc8b060,{roughness:.6}),horn=std(0xe8dcc0),eye=new THREE.MeshStandardMaterial({color:0x200,emissive:0xffb020,emissiveIntensity:5});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1.6,18,14),sc);body.scale.set(1.6,1,1);body.position.y=2;g.add(body);const b2=new THREE.Mesh(new THREE.SphereGeometry(1.2,16,12),bel);b2.scale.set(1.4,.7,.9);b2.position.set(-.3,1.5,0);g.add(b2);
+  const neck=new THREE.Group();neck.position.set(-2,2.8,0);g.add(neck);let p=neck;const segs=[];for(let i=0;i<5;i++){const s=new THREE.Group();s.position.set(i?-.55:0,i?.25:0,0);s.add(new THREE.Mesh(new THREE.SphereGeometry(.55-i*.04,12,10),sc));p.add(s);p=s;segs.push(s)}
+  const head=new THREE.Group();head.position.set(-.7,.2,0);p.add(head);head.add(box(1.3,.6,.8,sc,-.3,0,0));const jaw=new THREE.Group();jaw.position.set(.1,-.3,0);head.add(jaw);jaw.add(box(1.2,.2,.7,bel,-.45,0,0));
+  for(const z of[-1,1]){const hn=new THREE.Mesh(new THREE.ConeGeometry(.12,.9,8),horn);hn.position.set(.2,.5,z*.28);hn.rotation.z=-1;head.add(hn);const e=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),eye);e.position.set(-.45,.2,z*.38);head.add(e)}
+  for(let i=0;i<6;i++){const t=new THREE.Mesh(new THREE.ConeGeometry(.06,.2,5),horn);t.rotation.x=Math.PI;t.position.set(-.9+i*.12,-.15,.3);head.add(t)}
+  const wingM=new THREE.MeshStandardMaterial({color:0x0e4a2a,side:THREE.DoubleSide,roughness:.6});const wings=[];
+  for(const z of[-1,1]){const w=new THREE.Group();w.position.set(.2,3,z*.8);const sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(1.5,4);sh.lineTo(.4,3.2);sh.lineTo(-.5,3.6);sh.lineTo(-1,2.6);sh.lineTo(-1.8,2.8);sh.lineTo(-1.6,1);sh.closePath();const m=new THREE.Mesh(new THREE.ShapeGeometry(sh),wingM);m.rotation.x=z*-1.1;w.add(m);g.add(w);wings.push(w)}
+  const tail=new THREE.Group();tail.position.set(2.2,1.8,0);g.add(tail);let tp=tail;const tsegs=[];for(let i=0;i<7;i++){const s=new THREE.Group();s.position.set(i?.55:0,0,0);s.add(new THREE.Mesh(new THREE.SphereGeometry(.45-i*.05,10,8),sc));tp.add(s);tp=s;tsegs.push(s)}const spade=new THREE.Mesh(new THREE.ConeGeometry(.35,.7,4),sc);spade.rotation.z=-Math.PI/2;spade.position.x=.5;tp.add(spade);
+  for(const x of[-1,1])for(const z of[-1,1]){const l=box(.5,1.4,.5,sc,x*.9,.6,z*.9);g.add(l)}const claw=box(.7,.4,.5,horn,-1.3,.25,.95);g.add(claw);
+  g.userData={head,jaw,segs,wings,tsegs,claw};return shadowAll(g,true,false)}
+
+// ---------- rooms (beats) ----------
+// beat: {h: hazard type, k: key ('up','down','left','right','sword', or 'lr' random)}
+const ROOMS=[
+ {name:'The Drawbridge',beats:[{h:'pit',k:'up'},{h:'bats',k:'sword'},{h:'pit',k:'up'}]},
+ {name:'Hall of Blades',beats:[{h:'blade',k:'down'},{h:'blade',k:'down'},{h:'ceiling',k:'right'}]},
+ {name:'The Crypt',beats:[{h:'skeleton',k:'sword'},{h:'skeleton',k:'sword'},{h:'pit',k:'up'}]},
+ {name:'Rolling Stones',beats:[{h:'boulder',k:'up'},{h:'boulder',k:'up'},{h:'ceiling',k:'right'}]},
+ {name:'The Fire Gallery',beats:[{h:'fire',k:'left'},{h:'arrows',k:'down'},{h:'fire',k:'left'}]},
+ {name:'Bridge of Embers',bridge:true,beats:[{h:'tilt',k:'lr'},{h:'tilt',k:'lr'},{h:'pit',k:'up'},{h:'tilt',k:'lr'}]},
+ {name:'Goblin Kitchen',beats:[{h:'goblin',k:'sword'},{h:'arrows',k:'down'},{h:'goblin',k:'sword'},{h:'bats',k:'sword'}]},
+ {name:'The Crumbling Stair',beats:[{h:'ceiling',k:'right'},{h:'pit',k:'up'},{h:'blade',k:'down'},{h:'boulder',k:'up'}]},
+ {name:'The Treasure Vault',beats:[{h:'skeleton',k:'sword'},{h:'fire',k:'left'},{h:'boulder',k:'up'},{h:'arrows',k:'down'},{h:'goblin',k:'sword'}]},
+ {name:"Cindermaw's Lair",dragon:true,beats:[{h:'dfire',k:'lr'},{h:'dtail',k:'up'},{h:'dclaw',k:'left'},{h:'dfire',k:'lr'},{h:'dbite',k:'down'},{h:'dfinal',k:'sword'},{h:'dfinal',k:'sword'},{h:'dfinal',k:'sword'}]}];
+const ICON={up:'⬆️',down:'⬇️',left:'⬅️',right:'➡️',sword:'⚔️'},BTN={up:'bU',down:'bD',left:'bL',right:'bR',sword:'bS'};
+const DEATH={pit:'Sir Rowan took the express route down. 🕳️',bats:'Carried off by a cloud of bats! 🦇',blade:'Close shave… a little too close. ✂️',ceiling:'Flattened like a pancake! 🥞',skeleton:'The skeleton dragged him into the crypt! 💀',boulder:'Rolled flat by a boulder! 🪨',fire:'Toasted to a crisp! 🔥',arrows:'Turned into a pincushion! 🏹',tilt:'He went for a swim… in lava! 🌋',goblin:'Bonked on the helmet by a goblin! 🍳',dfire:'Cindermaw had knight for lunch… well done. 🔥',dtail:'Swatted like a fly! 🐉',dclaw:'Squished by a dragon claw!',dbite:'CHOMP! 🐉',dfinal:'Cindermaw shrugged off the hit and roared! 🐉'};
+
+// ---------- game flow ----------
+let state='menu',roomI=0,beatI=0,score=0,lives=5,phase=null,pT=0,beat=null,hz=null,kx=0,lastT=0,need=null,window_=1.2,dragon=null,cage=null,wizard=null,perfect=true,deaths=0;
+const camPos=new THREE.Vector3();let camX=0;
+function hud(){$('score').textContent=score;$('lives').textContent='🛡️'.repeat(Math.max(0,lives));$('room').textContent=(roomI+1)+'/10'}
+function startGame(){audio();score=0;lives=5;roomI=0;deaths=0;$('ov').classList.add('hidden');startRoom()}
+function startRoom(){const R=ROOMS[roomI];beatI=0;perfect=true;const len=R.dragon?22:R.beats.length*7+8;buildRoom(len,THEMES[roomI],{bridge:R.bridge});kx=-6;camX=kx+3;burn(false);K.visible=true;
+  dragon=wizard=cage=null;if(R.dragon){dragon=makeDragon();dragon.position.set(15,0,-.3);dragon.scale.setScalar(1.3);roomG.add(dragon);cage=makeCage();cage.position.set(21.5,2.2,-1);roomG.add(cage);wizard=makeWizard();wizard.position.set(21.5,2.25,-1);roomG.add(wizard)}
+  $('roomNum').textContent='ROOM '+(roomI+1);$('roomTitle').textContent=R.name;$('roomName').classList.add('show');setTimeout(()=>$('roomName').classList.remove('show'),1800);
+  state='play';setPhase('intro',1.6);hud();window_=Math.max(.75,1.35-roomI*.06)}
+function setPhase(p,t){phase=p;pT=0;phase_len=t}
+let phase_len=1;
+function beatX(i){return i*7+2}
+function nextBeat(){const R=ROOMS[roomI];if(beatI>=R.beats.length){roomClear();return}beat={...R.beats[beatI]};if(beat.k==='lr')beat.k=Math.random()<.5?'left':'right';need=beat.k;setupHazard();setPhase('approach',.9)}
+function roomClear(){score+=1000*(roomI+1)+(perfect?500:0);hud();S.good();if(perfect)banner($('banner'),'✨ Perfect room! +500',1300);
+  if(ROOMS[roomI].dragon){win();return}setPhase('exit',1.6)}
+function win(){state='won';S.fanfare();const nb=score>best;if(nb){best=score;store.set('best',best);$('best').textContent='Best '+best}
+  setTimeout(()=>{$('panel').innerHTML=`<h2>🏆 Victory!</h2><p>Cindermaw flees the keep and Sir Rowan frees <b>Wizard Bram</b>!</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>Silly endings along the way: ${deaths}</p><p>Best: ${best}</p><button id="go">Play again</button>`;$('ov').classList.remove('hidden');$('go').onclick=startGame},3200)}
+function input(k){if(state!=='play')return;audio();const b=$(BTN[k]);if(b){b.classList.add('on');setTimeout(()=>b.classList.remove('on'),120)}
+  if(phase!=='prompt')return;if(k===need){score+=100*(roomI+1)+Math.round((1-pT/phase_len)*100);hud();S.good();$('prompt').classList.add('good');hidePrompt();setPhase('win',hz.winLen||1.1);if(hz.onWin)hz.onWin()}else{failBeat()}}
+function failBeat(){perfect=false;deaths++;S.yell();vibrate(220);$('prompt').classList.add('bad');hidePrompt();setPhase('fail',hz.failLen||1.8);if(hz.onFail)hz.onFail()}
+function showPrompt(){const p=$('prompt');p.textContent=ICON[need];p.className='show';$(BTN[need]).classList.add('hint');S.cue()}
+function hidePrompt(){setTimeout(()=>{$('prompt').className=''},220);for(const id of Object.values(BTN))$(id).classList.remove('hint')}
+function afterFail(){lives--;hud();if(lives<=0){state='over';const nb=score>best;if(nb){best=score;store.set('best',best);$('best').textContent='Best '+best}
+    $('panel').innerHTML=`<h2>Game over</h2><p>${DEATH[beat.h]}</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>You reached room ${roomI+1}: ${ROOMS[roomI].name}</p><p>Best: ${best}</p><button id="go">Try again</button>`;$('ov').classList.remove('hidden');$('go').onclick=startGame;return}
+  clearHazard();burn(false);K.visible=true;kx=ROOMS[roomI].dragon?4:beatX(beatI)-3.2;nextBeat()}
+
+// ---------- hazards ----------
+function clearHazard(){if(hz&&hz.objs)hz.objs.forEach(o=>o.parent&&o.parent.remove(o));if(hz&&hz.tiles)hz.tiles.forEach(t=>{t.visible=true;t.position.y=t.userData.y0??t.position.y});hz=null}
+function setupHazard(){clearHazard();const bx=beatX(beatI),h=beat.h;hz={objs:[],x:bx,h};
+  const add=o=>{roomG.add(o);hz.objs.push(o);return o};
+  if(h==='pit'){hz.tiles=tiles.filter(t=>t.position.x>bx+.2&&t.position.x<bx+4.2);hz.tiles.forEach(t=>t.userData.y0=t.position.y);hz.stand=bx;hz.adv=6;hz.winLen=.9;
+    hz.tele=k=>hz.tiles.forEach(t=>{t.position.y=t.userData.y0+(Math.random()-.5)*.06*k});
+    hz.win=k=>{hz.tiles.forEach(t=>t.position.y=t.userData.y0-k*k*12);kx=bx+k*6;K.position.y=Math.sin(k*Math.PI)*2.2;pose('jump',k)};
+    hz.fail=k=>{hz.tiles.forEach(t=>t.position.y=t.userData.y0-k*k*14);kx=bx+Math.min(k*3,2);K.position.y=-Math.max(0,k-.3)*k*14;pose('flail',k);if(k>.2&&!hz.sf){hz.sf=1}}}
+  else if(h==='bats'){const b=add(makeBats());b.position.set(bx+10,1.6,0);hz.stand=bx;hz.adv=7;
+    hz.tele=k=>{b.position.x=bx+10-k*7.2;b.children.forEach(c=>{c.children[1].rotation.x=Math.sin(performance.now()/40+c.userData.ph);c.children[2].rotation.x=-Math.sin(performance.now()/40+c.userData.ph)})};
+    hz.win=k=>{pose('slash',k*1.6);b.children.forEach((c,i)=>{c.position.x+=.15*(1+i%3);c.position.y+=.12*((i%2)*2-1);c.position.z+=.1*(i%3-1)});if(k>.5){kx=bx+(k-.5)*2*7;pose('run',k*3)}};
+    hz.fail=k=>{b.position.set(kx,1+k*5,0);K.position.y=k*5;pose('flail',k);b.children.forEach(c=>c.rotation.y+=.3)}}
+  else if(h==='blade'){const bl=add(makeBlade());bl.position.set(bx+2.2,7,0);hz.stand=bx+.6;hz.adv=7;hz.ang=-1.2;
+    const sw=a=>bl.rotation.x=0,setA=a=>{bl.rotation.z=a};hz.tele=k=>setA(-1.3+k*.9);
+    hz.win=k=>{setA(-.4+k*2.6);if(k<.6)pose('duck',k);else{kx=hz.stand+(k-.6)/.4*6.4;pose('run',k*3)}};
+    hz.fail=k=>{setA(-.4+k*2.6);if(k>.15){pose('knocked',k);kx=hz.stand-k*3;K.position.y=Math.sin(Math.min(1,k*1.5)*Math.PI)*1.5}}}
+  else if(h==='ceiling'){const sp=add(makeSpikes(5));sp.position.set(bx+1.5,6.8,0);hz.stand=bx+1.5;hz.adv=7;
+    hz.tele=k=>{sp.position.y=6.8-k*1.2+(Math.random()-.5)*.05};
+    hz.win=k=>{sp.position.y=Math.max(1.35,5.6-k*k*12);kx=hz.stand+k*5.5;pose('run',k*4)};
+    hz.fail=k=>{sp.position.y=Math.max(1.35,5.6-k*k*20);if(sp.position.y<=2.1)pose('flat',k);else pose('idle',k)}}
+  else if(h==='skeleton'){const s=add(makeSkeleton());s.position.set(bx+2.4,-2.3,0);hz.stand=bx;hz.adv=7;
+    hz.tele=k=>{s.position.y=-2.3+Math.min(1,k*1.3)*2.3;s.userData.arm.rotation.z=1.2+Math.sin(k*20)*.2};
+    hz.win=k=>{pose('slash',k*1.6);if(k>.2&&!hz.b){hz.b=1;S.bones();s.children.forEach(c=>{c.userData.v=new THREE.Vector3((Math.random())*4,2+Math.random()*3,(Math.random()-.5)*3)})}if(hz.b)s.children.forEach(c=>{c.userData.v.y-=.4;c.position.addScaledVector(c.userData.v,.016);c.rotation.x+=.1;if(c.position.y<.05)c.position.y=.05});if(k>.6){kx=bx+(k-.6)/.4*7;pose('run',k*3)}};
+    hz.fail=k=>{s.position.x=bx+2.4-Math.min(1.4,k*4);s.userData.arm.rotation.z=.3;if(k>.3){K.position.y=-(k-.3)*4;s.position.y=-(k-.3)*4}pose('flail',k)}}
+  else if(h==='boulder'){const b=add(makeBoulder());b.position.set(bx+14,1.2,0);hz.stand=bx;hz.adv=7;
+    hz.tele=k=>{b.position.x=bx+14-k*9;b.rotation.z+=.08};
+    hz.win=k=>{b.position.x=bx+5-k*14;b.rotation.z+=.15;K.position.y=Math.sin(Math.min(1,k*1.6)*Math.PI)*3;pose('jump',k);if(k>.6){kx=bx+(k-.6)/.4*7;pose('run',k*3)}};
+    hz.fail=k=>{b.position.x=bx+5-k*14;b.rotation.z+=.15;if(b.position.x<kx+1.2)pose('flat',k)}}
+  else if(h==='fire'){const n=add(box(.6,.6,.8,std(0x2a2a2a,{metalness:.4}),bx+2.6,1.4,-2.1));const n2=add(box(.6,.6,.8,std(0x2a2a2a,{metalness:.4}),bx+2.6,1.4,2.1));hz.stand=bx+1.6;hz.adv=7;
+    hz.tele=k=>{if(Math.random()<.3)flames(bx+2.6,1.4,-1.8,0,.5,1,0x804020)};
+    hz.win=k=>{if(k<.55){kx=hz.stand-k*2.5;pose('back',k);if(Math.random()<.9)flames(bx+2.6,1.2+Math.random()*.6,-1.8,0,0,2);}else{kx=hz.stand-1.4+(k-.55)/.45*7.4;pose('run',k*3)}if(k<.55)fireParts.slice(-2).forEach(f=>{f.vz=7;f.vx=(Math.random()-.5)})};
+    hz.fail=k=>{if(k<.5){flames(bx+2.6,1.2+Math.random()*.6,-1.8,0,0,3);fireParts.slice(-3).forEach(f=>{f.vz=7;f.vx=(Math.random()-.5)})}if(k>.15&&!hz.b){hz.b=1;burn(true);S.fire()}if(k>.3&&Math.random()<.3)smoke(kx,2,1);pose('burnt',k)}}
+  else if(h==='arrows'){const a=add(makeArrows());a.position.set(bx+12,0,0);hz.stand=bx;hz.adv=7;
+    hz.tele=k=>{a.position.x=bx+12-k*7};hz.winLen=1;
+    hz.win=k=>{a.position.x=bx+5-k*20;if(k<.5)pose('duck',k);else{kx=bx+(k-.5)/.5*7;pose('run',k*3)}};
+    hz.fail=k=>{a.position.x=Math.max(kx+.3,bx+5-k*20);pose(k>.3?'knocked':'idle',k)}}
+  else if(h==='tilt'){hz.stand=bx;hz.adv=7;const side=need==='left'?1:-1;hz.tele=k=>{K.rotation.x=side*k*.35;pose('lean',0)};
+    hz.win=k=>{K.rotation.x=side*.35*(1-k);pose('lean',-side*.4*(1-k));if(k>.5){kx=bx+(k-.5)/.5*7;pose('run',k*3)}};
+    hz.fail=k=>{K.rotation.x=side*(.35+k*1.6);K.position.y=-k*k*8;pose('flail',k);if(k>.5&&!hz.b){hz.b=1;burn(true);S.fire()}}}
+  else if(h==='goblin'){const gb=add(makeGoblin());gb.position.set(bx+3,5,0);hz.stand=bx;hz.adv=7;hz.tele=k=>{gb.position.y=5-Math.min(1,k*1.4)*5;gb.position.x=bx+3-k*.8;gb.userData.cl.rotation.z=k*1.5};
+    hz.win=k=>{pose('slash',k*1.6);if(k>.2){gb.position.x+=.18;gb.position.y+=.12-k*.15;gb.rotation.z+=.25}if(k>.55){kx=bx+(k-.55)/.45*7;pose('run',k*3)}};
+    hz.fail=k=>{gb.userData.cl.rotation.z=1.5-Math.min(1,k*4)*3;if(k>.25){pose('flat',k);K.userData.g.scale.y=.7}else pose('idle',k)}}
+  else if(h.startsWith('d')){const D=dragon.userData;hz.stand=kx;hz.adv=h==='dfinal'?0:0;hz.winLen=1.2;hz.failLen=2;
+    if(h==='dfire'){const side=need==='left'?-1:1;hz.tele=k=>{D.head.rotation.z=-k*.5;D.jaw.rotation.z=k*.6};
+      hz.win=k=>{K.position.z=side*Math.min(1,k*4)*1.6;pose(k<.3?'run':'idle',k*3);D.jaw.rotation.z=.6;if(k<.7)flames(dragon.position.x-3.3,1.6,0,-1,.6,3);if(k>.75)K.position.z=side*1.6*(1-(k-.75)*4)};
+      hz.fail=k=>{D.jaw.rotation.z=.6;if(k<.6)flames(dragon.position.x-3.3,1.6,0,-1,.6,3);if(k>.2&&!hz.b){hz.b=1;burn(true);S.fire()}if(Math.random()<.3)smoke(kx,2,1);pose('burnt',k)};S.roar()}
+    else if(h==='dtail'){hz.tele=k=>{D.tsegs.forEach((s,i)=>s.rotation.y=k*.4)};hz.win=k=>{K.position.y=Math.sin(k*Math.PI)*2.4;pose('jump',k);D.tsegs.forEach((s,i)=>s.rotation.y=.4-Math.sin(k*Math.PI)*.9)};hz.fail=k=>{D.tsegs.forEach(s=>s.rotation.y=.4-k*1.2);if(k>.3){kx=hz.stand-(k-.3)*12;K.position.y=Math.sin(Math.min(1,(k-.3)*2)*Math.PI)*3;pose('flail',k)}}}
+    else if(h==='dclaw'){hz.tele=k=>{D.claw.position.y=.25+k*2.5};hz.win=k=>{D.claw.position.y=2.75-Math.min(1,k*3)*2.5;kx=hz.stand-Math.min(1,k*3)*1.8;pose('back',k);if(k>.6)kx=hz.stand-1.8+(k-.6)*4.5};hz.fail=k=>{D.claw.position.y=2.75-Math.min(1,k*3)*2.5;if(k>.25)pose('flat',k)}}
+    else if(h==='dbite'){hz.tele=k=>{D.head.rotation.z=k*.4;D.jaw.rotation.z=k*.8};hz.win=k=>{D.jaw.rotation.z=.8-Math.min(1,k*3)*.8;pose(k<.5?'duck':'idle',k);if(k>.25&&!hz.b){hz.b=1;S.clang()}};hz.fail=k=>{D.jaw.rotation.z=.8-Math.min(1,k*3)*.8;if(k>.3)K.visible=false}}
+    else if(h==='dfinal'){hz.tele=k=>{D.head.rotation.z=-k*.3;kb.blade.material.emissiveIntensity=.2+k*4};
+      hz.win=k=>{kx=hz.stand+Math.sin(Math.min(1,k*2)*Math.PI)*1.5;pose('slash',k*1.6);if(k>.3&&!hz.b){hz.b=1;S.clang();S.roar();for(let i=0;i<14;i++)flames(dragon.position.x-2.5,2.5,0,(Math.random()-.5)*.4,2,1,0x80c0ff)}D.head.rotation.z=.3*Math.sin(k*10);
+        if(beatI===ROOMS[roomI].beats.length-1&&k>.5){dragon.position.x+=.25;dragon.position.y+=.1;D.wings.forEach((w,i)=>w.rotation.x=Math.sin(performance.now()/90)*(i?1:-1)*.6);cage.position.y+=.05;cage.rotation.y+=.05}};
+      hz.fail=k=>{if(k>.2){kx=hz.stand-(k-.2)*10;K.position.y=Math.sin(Math.min(1,(k-.2)*2)*Math.PI)*2;pose('flail',k)}}}
+    hz.stand=7}
+  hz.tele=hz.tele||(()=>{})}
+
+function update(dt){const t=performance.now()/1000;
+  for(const tc of torches){const f=.8+Math.random()*.3;tc.pl.intensity=22*f;tc.f.scale.set(.8+Math.random()*.2,1.3+Math.random()*.3,1)}
+  if(roomG.userData.lava)roomG.userData.lava.material.color.setHSL(.04+Math.sin(t*2)*.01,1,.5+Math.sin(t*3)*.05);
+  if(dragon&&!(hz&&hz.h&&hz.h.startsWith('d')&&(phase==='win'||phase==='fail'))){const D=dragon.userData;D.segs.forEach((s,i)=>s.rotation.z=Math.sin(t*1.5-i*.4)*.08);D.wings.forEach((w,i)=>w.rotation.y=Math.sin(t*1.2)*.15*(i?1:-1));D.tsegs.forEach((s,i)=>s.rotation.y=Math.sin(t*2-i*.5)*.15);if(Math.random()<.04)smoke(dragon.position.x-3.6,2.4,1)}
+  if(wizard)wizard.rotation.y=Math.sin(t)*.3;
+  if(state==='play'){pT+=dt;const k=Math.min(1,pT/phase_len);K.position.y=0;
+    if(phase==='intro'){kx=-6+k*2;pose('run',t);if(k>=1){nextBeat()}}
+    else if(phase==='approach'){const from=hz._from??(hz._from=kx);kx=from+(hz.stand-from)*k;pose('run',t);if(k>=1)setPhase('tele',.7)}
+    else if(phase==='tele'){hz.tele(k);pose('idle',t);if(k>=1){setPhase('prompt',window_);showPrompt()}}
+    else if(phase==='prompt'){hz.tele(1);pose('idle',t);$('prompt').style.setProperty('--p',((1-k)*100)+'%');if(k>=1)failBeat()}
+    else if(phase==='win'){hz.win(k);if(k>=1){beatI++;const keep=hz.h;if(!keep.startsWith('d')){/* keep debris */}clearHazard();K.rotation.x=0;K.position.z=0;kb.blade.material.emissiveIntensity=.2;nextBeat()}}
+    else if(phase==='fail'){hz.fail(k);if(k>=1){banner($('banner'),DEATH[beat.h],1600);K.rotation.x=0;K.position.z=0;kb.blade.material.emissiveIntensity=.2;afterFail()}}
+    else if(phase==='exit'){const L=ROOMS[roomI].beats.length*7+8;kx=beatX(beatI)-3.2+k*(L+4-(beatX(beatI)-3.2));pose('run',t);roomG.userData.leaf.rotation.y=-Math.min(1,k*2)*1.4;if(k>=1){roomI++;startRoom()}}}
+  if(state==='won'){pose('idle',t);if(dragon){dragon.position.x+=dt*6;dragon.position.y+=dt*3}if(cage){cage.position.y+=dt*2;if(wizard)wizard.position.y=2.55}}
+  K.position.x=kx;
+  // particles
+  for(const f of fireParts){f.l-=dt;f.s.position.x+=f.vx*dt;f.s.position.y+=f.vy*dt;f.s.position.z+=f.vz*dt;const s=1.2+(1-f.l)*2.2;f.s.scale.set(s,s,1);f.s.material.opacity=Math.max(0,f.l);f.s.material.color.setHSL(.1-(1-f.l)*.08,1,.6);if(f.l<=0){scene.remove(f.s);f.dead=true}}
+  for(let i=fireParts.length-1;i>=0;i--)if(fireParts[i].dead)fireParts.splice(i,1);
+  for(const s of smokeParts){s.l-=dt;s.s.position.y+=dt*1.2;const sc=.6+(1.4-s.l)*1.5;s.s.scale.set(sc,sc,1);s.s.material.opacity=Math.max(0,s.l/1.4*.6);if(s.l<=0){scene.remove(s.s);s.dead=true}}
+  for(let i=smokeParts.length-1;i>=0;i--)if(smokeParts[i].dead)smokeParts.splice(i,1);
+  // camera: side view, frames knight and what's ahead
+  const a=innerWidth/innerHeight,W=dragon?(a<1?18:24):(a<1?9.5:15),tf=Math.tan(THREE.MathUtils.degToRad(22));camera.fov=44;
+  let d=(W/2)/(tf*a);d=Math.max(7,Math.min(26,d));
+  const look=dragon?12.5:kx+3.2;camX+=(look-camX)*Math.min(1,dt*3);
+  const padH=($('pad').offsetHeight||120)/innerHeight;const yOff=(padH-.08)*2*d*tf*.5;
+  camera.position.set(camX,2.6+yOff*.5,d);camera.lookAt(camX,1.9-yOff*.55,0);camera.updateProjectionMatrix();
+  sun.position.set(camX+4,12,10);sun.target.position.set(camX,0,0);
+}
+function loop(ts){const dt=Math.min(.05,lastT?(ts-lastT)/1000:.016);lastT=ts;update(dt);render(dt);requestAnimationFrame(loop)}
+$('go').onclick=startGame;
+
+// ---------- controls ----------
+const BM={bU:'up',bD:'down',bL:'left',bR:'right',bS:'sword'};
+for(const id in BM){const el=$(id);const on=e=>{e.preventDefault();input(BM[id])};el.addEventListener('touchstart',on,{passive:false});el.addEventListener('mousedown',on)}
+let sx=0,sy=0;const cv=$('c');
+cv.addEventListener('touchstart',e=>{const t=e.changedTouches[0];sx=t.clientX;sy=t.clientY;e.preventDefault()},{passive:false});
+cv.addEventListener('touchend',e=>{const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;if(Math.max(Math.abs(dx),Math.abs(dy))<26)input('sword');else if(Math.abs(dx)>Math.abs(dy))input(dx>0?'right':'left');else input(dy<0?'up':'down');e.preventDefault()},{passive:false});
+cv.addEventListener('mousedown',()=>input('sword'));
+addEventListener('keydown',e=>{const k={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',' ':'sword',Enter:'sword'}[e.key];if(k){e.preventDefault();if(state==='play')input(k);else if(!$('ov').classList.contains('hidden')&&(e.key==='Enter'||e.key===' '))startGame()}});
+document.addEventListener('touchmove',e=>{if(!e.target.closest||!e.target.closest('.panel'))e.preventDefault()},{passive:false});
+
+window.__kp={get state(){return state},get phase(){return phase},get need(){return need},get room(){return roomI},set room(v){roomI=v},input,startRoom,get lives(){return lives},get beatI(){return beatI}};
+buildRoom(30,THEMES[0]);kx=0;pose('idle',0);$('loading').remove();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
