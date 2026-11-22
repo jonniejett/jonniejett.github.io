@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Parkway Dash 3D – Jonnie's Game Room</title>
+<title>Parkway Dash 3D: WNFD 24 – Jonnie's Game Room</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none;overflow:hidden}
@@ -38,7 +38,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 <div class="center"><b id="score">0</b><small id="best">Best 0</small></div>
 <div class="overlay" id="ov"><div class="panel" id="panel">
   <h2>Parkway Dash <span>3D</span></h2>
-  <p>Drive the Palisades Parkway as far as you can, from daylight into the night.</p>
+  <p>Drive the <b>WNFD 24</b> fire truck up the Palisades Parkway as far as you can, from daylight into the night. 🚒</p>
   <p>👆 <b>Swipe</b> or <b>tap</b> left/right to change lanes.<br>⌨️ Arrow keys work too.</p>
   <p>Dodge 🦌 deer, 🕳️ potholes, 🚧 cones and traffic.<br>Grab 🥯 bagels and ⛽ gas for bonus points.</p>
   <button id="go">Start driving</button>
@@ -205,10 +205,74 @@ const board=new THREE.Mesh(new THREE.BoxGeometry(6,2.1,.15),[green,green,green,g
 board.position.y=4.2;sign.add(board);for(const x of[-2.2,2.2])sign.add(box(.18,4.2,.18,postMat,x,2.1,-.1));shadowAll(sign);
 sign.position.set(ROAD_W/2+4.5,0,-400);scene.add(sign);let exitIdx=0,signNext=500;
 
-// player
-const player=makeCar(0xd4141c,'sport');scene.add(player);
-const headL=new THREE.SpotLight(0xfff1cf,0,90,.42,.55,1.2);headL.position.set(0,1,-2.2);player.add(headL);
+// player: WNFD 24 fire truck
+function textTex(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t}
+function makeFireTruck(){
+  const g=new THREE.Group();
+  const red=std(0xc8102e,{metalness:.45,roughness:.3}),white=std(0xf4f4f0,{roughness:.4}),chrome=std(0xd9dde1,{metalness:.95,roughness:.18}),black=std(0x151515,{roughness:.8});
+  const W=2.4,BL=5.0,BH=1.95,Y0=.62,CL=2.3,CH=2.05,L=BL+CL;
+  const rearZ=L/2,frontZ=-L/2,bodyZ=rearZ-BL/2,cabZ=frontZ+CL/2;
+  // rear body + cab
+  const body=roundBox(BL,BH,W,.12,red);body.position.set(0,Y0+BH/2,bodyZ);g.add(body);
+  const cab=roundBox(CL,CH,W,.25,red);cab.position.set(0,Y0+CH/2,cabZ);g.add(cab);
+  // white cab roof + stripe all round
+  g.add(box(W-.1,.08,CL-.3,white,0,Y0+CH+.02,cabZ));
+  g.add(box(W+.03,.22,L-.2,white,0,Y0+.75,0));
+  // windshield + side windows
+  const glass=std(0x2b3e50,{metalness:.3,roughness:.1});
+  g.add(box(W-.3,.85,.06,glass,0,Y0+CH-.6,frontZ-.04));
+  for(const s of[-1,1])g.add(box(.06,.75,CL-.8,glass,s*(W/2+.02),Y0+CH-.6,cabZ-.1));
+  // grille, bumper, headlights
+  g.add(box(W-.6,.55,.08,chrome,0,Y0+.6,frontZ-.05));
+  g.add(box(W+.1,.25,.3,chrome,0,Y0+.05,frontZ-.1));
+  for(const s of[-1,1])g.add(box(.35,.2,.06,M.head,s*(W/2-.35),Y0+.62,frontZ-.08));
+  // light bar on cab roof
+  const lights=[];
+  for(let i=0;i<6;i++){const red_=i%2===0;const m=new THREE.MeshStandardMaterial({color:red_?0x550000:0x666666,emissive:red_?0xff1010:0xffffff,emissiveIntensity:.3});
+    const b=box(.34,.18,.32,m,-.85+i*.34,Y0+CH+.15,cabZ+.2);g.add(b);lights.push(m)}
+  // rear corner beacons
+  for(const s of[-1,1]){const m=new THREE.MeshStandardMaterial({color:0x550000,emissive:0xff1010,emissiveIntensity:.3});g.add(box(.2,.2,.12,m,s*(W/2-.2),Y0+BH-.15,rearZ+.06));lights.push(m)}
+  // compartment doors (chrome trim)
+  for(const s of[-1,1])for(let i=0;i<4;i++){g.add(box(.03,1.0,.05,chrome,s*(W/2+.02),Y0+1.35,rearZ-.4-i*1.15))}
+  // ladder on top
+  const lad=new THREE.Group();
+  for(const s of[-1,1])lad.add(box(.08,.12,L-.6,chrome,s*.55,0,0));
+  for(let z=-L/2+.5;z<L/2-.4;z+=.42)lad.add(box(1.1,.05,.05,chrome,0,0,z));
+  lad.position.set(0,Y0+Math.max(BH,CH)+.35,.2);g.add(lad);
+  for(const z of[-1.4,1.2,2.9])g.add(box(.08,.3,.08,chrome,0,Y0+BH+.15,z));
+  // hose reel / pump panel detail
+  g.add(box(.05,.55,.9,chrome,W/2+.03,Y0+.95,cabZ+CL/2+.1));g.add(box(.05,.55,.9,chrome,-W/2-.03,Y0+.95,cabZ+CL/2+.1));
+  // side lettering
+  const sideTex=textTex(1024,256,(c,w,h)=>{c.clearRect(0,0,w,h);c.fillStyle='#ffd200';c.strokeStyle='#000';c.lineWidth=10;c.textAlign='center';c.textBaseline='middle';c.font='900 170px Impact,"Arial Black",system-ui,sans-serif';c.strokeText('WNFD 24',w/2,h/2+8);c.fillText('WNFD 24',w/2,h/2+8)});
+  const sideMat=new THREE.MeshBasicMaterial({map:sideTex,transparent:true,toneMapped:false});
+  for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.PlaneGeometry(4.2,1.05),sideMat);p.rotation.y=s*Math.PI/2;p.position.set(s*(W/2+.075),Y0+1.38,bodyZ);g.add(p)}
+  // cab door text
+  const doorTex=textTex(512,256,(c,w,h)=>{c.fillStyle='rgba(0,0,0,0)';c.clearRect(0,0,w,h);c.fillStyle='#ffd200';c.beginPath();c.arc(w/2,h/2,110,0,7);c.fill();c.fillStyle='#c8102e';c.beginPath();c.arc(w/2,h/2,92,0,7);c.fill();c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';c.font='900 64px Impact,"Arial Black",sans-serif';c.fillText('WNFD',w/2,h/2-18);c.font='900 54px Impact,"Arial Black",sans-serif';c.fillText('24',w/2,h/2+40)});
+  const doorMat=new THREE.MeshBasicMaterial({map:doorTex,transparent:true,toneMapped:false});
+  for(const s of[-1,1]){const p=new THREE.Mesh(new THREE.PlaneGeometry(1.2,.6),doorMat);p.rotation.y=s*Math.PI/2;p.position.set(s*(W/2+.08),Y0+.95,cabZ+.25);g.add(p)}
+  // rear: chevrons + WNFD 24
+  const backTex=textTex(512,512,(c,w,h)=>{c.fillStyle='#c8102e';c.fillRect(0,0,w,h);
+    c.save();c.beginPath();c.rect(0,300,w,212);c.clip();for(let i=-8;i<12;i++){c.fillStyle=i%2?'#ffd200':'#c8102e';c.beginPath();const x=i*64;c.moveTo(x,300);c.lineTo(x+64,300);c.lineTo(x+64-212,512);c.lineTo(x-212,512);c.fill()}c.restore();
+    c.fillStyle='#ffd200';c.strokeStyle='#000';c.lineWidth=8;c.textAlign='center';c.textBaseline='middle';c.font='900 120px Impact,"Arial Black",sans-serif';c.strokeText('WNFD',w/2,95);c.fillText('WNFD',w/2,95);
+    c.font='900 140px Impact,"Arial Black",sans-serif';c.strokeText('24',w/2,215);c.fillText('24',w/2,215)});
+  const back=new THREE.Mesh(new THREE.PlaneGeometry(W-.15,BH-.15),new THREE.MeshStandardMaterial({map:backTex,roughness:.4,emissive:0xffffff,emissiveMap:backTex,emissiveIntensity:.12}));
+  back.position.set(0,Y0+BH/2,rearZ+.075);g.add(back);
+  for(const s of[-1,1])g.add(box(.3,.3,.06,M.tail,s*(W/2-.28),Y0+.35,rearZ+.09));
+  g.add(box(W+.1,.2,.3,chrome,0,Y0-.02,rearZ+.1));
+  // wheels (front + tandem rear)
+  const wg=new THREE.CylinderGeometry(.55,.55,.42,22);wg.rotateZ(Math.PI/2);const rg=new THREE.CylinderGeometry(.32,.32,.44,14);rg.rotateZ(Math.PI/2);
+  g.userData.wheels=[];
+  for(const z of[cabZ-.1,rearZ-1.7,rearZ-.6])for(const s of[-1,1]){const w=new THREE.Mesh(wg,black);w.position.set(s*(W/2-.2),.55,z);g.add(w);const r=new THREE.Mesh(rg,chrome);r.position.copy(w.position);g.add(r);g.userData.wheels.push(w)}
+  g.add(box(W-.3,.35,L-.6,black,0,.55,0));
+  // flashing red light
+  const flash=new THREE.PointLight(0xff2020,0,22,1.5);flash.position.set(0,Y0+CH+.8,cabZ);g.add(flash);
+  g.userData.lights=lights;g.userData.flash=flash;
+  g.userData.size={w:W,l:L};g.userData.frontZ=frontZ;
+  shadowAll(g);g.traverse(m=>{if(m.isMesh&&m.material&&m.material.isMeshBasicMaterial){m.castShadow=false}});return g}
+const player=makeFireTruck();scene.add(player);
+const headL=new THREE.SpotLight(0xfff1cf,0,90,.42,.55,1.2);headL.position.set(0,1.2,player.userData.frontZ-.2);player.add(headL);
 const headT=new THREE.Object3D();headT.position.set(0,0,-30);player.add(headT);headL.target=headT;
+function flashLights(t){const ph=Math.floor(t/140)%4;player.userData.lights.forEach((m,i)=>{const on=(i+ph)%2===0;m.emissiveIntensity=on?(2.2+night*3):.15});player.userData.flash.intensity=(ph%2?0:8)*(.3+night*1.4)}
 
 // ---------- game state ----------
 const LANE_X=[-3.2,0,3.2];
@@ -269,8 +333,8 @@ function update(dt){
   for(let i=0;i<postZ.length;i++){postZ[i]+=mv;if(postZ[i]>32)postZ[i]-=420}layoutPosts();
   for(const o of scenery){o.position.z+=mv;if(o.position.z>40)placeScenery(o,o.position.z-380)}
   sign.position.z+=mv;if(state==='play'){signNext-=mv;if(signNext<=0&&sign.position.z>30){drawSign(EXITS[exitIdx++%EXITS.length]);sign.position.z=-330;signNext=1300}}
-  if(state!=='crash'){const tx=LANE_X[lane],dx=tx-player.position.x;player.position.x+=dx*Math.min(1,dt*9);player.rotation.y=-dx*.08;player.rotation.z=dx*.03}
-  for(const w of player.userData.wheels)w.rotation.x-=mv/.4;
+  if(state!=='crash'){const tx=LANE_X[lane],dx=tx-player.position.x;player.position.x+=dx*Math.min(1,dt*9);player.rotation.y=-dx*.06;player.rotation.z=dx*.02}
+  for(const w of player.userData.wheels)w.rotation.x-=mv/.55;flashLights(performance.now());
   if(state==='play'){spawnAcc-=mv;if(spawnAcc<=0){spawnWave();spawnAcc=Math.max(26,62-dist*.004)+Math.random()*18}}
   const pw=player.userData.size.w,pl=player.userData.size.l;
   for(const o of objs){const m=o.mesh;
@@ -286,9 +350,9 @@ function update(dt){
   objs=objs.filter(o=>{if(o.mesh.position.z>30||o.done){scene.remove(o.mesh);return false}return true});
   applyTime();
   const portrait=innerWidth/innerHeight<.85;
-  const back=portrait?10.5:8,up=portrait?5.2:4.2;
+  const back=portrait?14:16,up=portrait?9.2:8.6;
   camSway+=(player.position.x*.55-camSway)*Math.min(1,dt*4);
-  camera.position.set(camSway,up,back);camera.lookAt(camSway*.6,1.2,-14);
+  camera.position.set(camSway,up,back);camera.lookAt(camSway*.6,1.2,-20);
   if(shake>0){camera.position.x+=(Math.random()-.5)*shake;camera.position.y+=(Math.random()-.5)*shake;shake*=Math.pow(.02,dt)}
   sun.position.set(player.position.x-18,34,6);sun.target.position.set(player.position.x,0,-14);
   $('mph').textContent=Math.round(speed*1.85);$('score').textContent=score();
