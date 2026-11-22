@@ -36,7 +36,8 @@
 <div class="overlay" id="ov"><div class="panel" id="panel">
   <h2>Skyline <span>Agent</span></h2>
   <p>You've dropped onto the roof of an enemy tower. Work your way down, grab every 📁 <b>secret file</b> behind the <b style="color:#ff5a6a">red doors</b>, and escape in the getaway car in the garage.</p>
-  <p>◀ ▶ walk · <b>▲</b> jump, or enter a red door, or ride the elevator up · <b>▼</b> duck, or ride down · <b>FIRE</b> shoot</p>
+  <p>◀ ▶ walk · <b>▲</b> jump, go into a door, ride an escalator or elevator up · <b>▼</b> duck, ride down · <b>FIRE</b> shoot</p>
+  <p>🚪 Duck into <b>any door</b> to hide from bullets, then press any button to step back out. 🪜 <b>Escalators</b> at the ends of each floor take you up or down one floor.</p>
   <p>💡 Jump and shoot a ceiling lamp to drop it on agents below. Duck under high shots, jump over low ones.</p>
   <p style="font-size:13px;opacity:.8">At an elevator, press ▲ or ▼ to call it, step in, then hold ▲/▼ to ride. The map on the right shows where the files are.</p>
   <button id="go">Drop in 🕶️</button>
@@ -59,7 +60,7 @@ const S={shot:()=>nz(.15,1800,.35),eshot:()=>nz(.15,900,.25),ding:()=>{tn(1320,1
 
 // ---------- constants ----------
 const FH=4,HALF=13,WALL=12.3,GUN=1.35;
-let N=12,floors=[],shafts=[],enemies=[],bullets=[],lamps=[],parts=[],level=1;
+let N=12,floors=[],shafts=[],escs=[],enemies=[],bullets=[],lamps=[],parts=[],level=1;
 const world=new THREE.Group();scene.add(world);
 
 // ---------- background city ----------
@@ -126,7 +127,7 @@ function rnd(a,b){return a+Math.random()*(b-a)}
 function buildLevel(){world.clear();floors=[];shafts=[];lamps=[];for(const e of enemies)scene.remove(e.m);enemies=[];for(const b of bullets)scene.remove(b.m);bullets=[];
   N=Math.min(10+level*2,22);
   // shafts: chain segments that overlap one floor so you transfer between them
-  const xs=[-8.5,5.5,-2.5,9,-6,2.5];let top=N,i=0;while(top>0){const lo=Math.max(0,top-(4+Math.floor(Math.random()*2)));shafts.push({x:xs[i%xs.length],lo,hi:top,pos:top,target:top,wait:1,dir:0});top=lo;i++}
+  const xs=[-6,5,-2,6.5,-4.5,2];let top=N,i=0;while(top>0){const lo=Math.max(0,top-(4+Math.floor(Math.random()*2)));shafts.push({x:xs[i%xs.length],lo,hi:top,pos:top,target:top,wait:1,dir:0});top=lo;i++}
   shafts[shafts.length-1].lo=0;
   const nearShaft=(f,x,m)=>shafts.some(s=>f>=s.lo&&f<=s.hi&&Math.abs(s.x-x)<m);
   // floors
@@ -142,7 +143,7 @@ function buildLevel(){world.clear();floors=[];shafts=[];lamps=[];for(const e of 
       // ceiling
       world.add(box(HALF*2,.12,4,concrete,0,y+FH-.46,-.2));
       // doors
-      const slots=[];for(let x=-10.5;x<=10.5;x+=3)if(!nearShaft(f,x,2.2)&&!(f===0&&x>6))slots.push(x+rnd(-.3,.3));slots.sort(()=>Math.random()-.5);
+      const slots=[];for(let x=-7.5;x<=7.5;x+=2.5)if(!nearShaft(f,x,2.2)&&!(f===0&&x>5))slots.push(x+rnd(-.3,.3));slots.sort(()=>Math.random()-.5);
       const nd=Math.min(slots.length,f===0?1:3);
       for(let k=0;k<nd;k++){const x=slots[k],red=k===0&&fileFloors.has(f);const d={x,type:red?'red':'blue',done:false,open:0};
         const g=new THREE.Group();g.position.set(x,y,-2.15);g.add(box(1.5,2.6,.12,trim,0,1.3,0));const panel=box(1.3,2.45,.1,red?redDoorM:blueDoorM,0,1.23,.06);g.add(panel);
@@ -169,6 +170,17 @@ function buildLevel(){world.clear();floors=[];shafts=[];lamps=[];for(const e of 
   // garage
   const carG=makeCar();carG.position.set(10.2,0,-.6);world.add(carG);world.userData.car=carG;
   const exitS=box(2.2,.5,.08,new THREE.MeshStandardMaterial({color:0x002200,emissive:0x30ff60,emissiveIntensity:3}),10.2,3.1,-2.1);world.add(exitS);world.userData.exitSign=exitS;
+  // escalators: every floor f>=1 links down to f-1, alternating ends
+  escs=[];const escSteps=canvasTex(64,64,(g,w,h)=>{g.fillStyle='#2a2c34';g.fillRect(0,0,w,h);g.fillStyle='#8a8f9c';for(let y=0;y<h;y+=8)g.fillRect(0,y,w,2)},{repeat:[1,8]});
+  const stepM=new THREE.MeshStandardMaterial({map:escSteps,metalness:.7,roughness:.35}),glassM=new THREE.MeshStandardMaterial({color:0x9fd8ff,transparent:true,opacity:.18,metalness:.2,roughness:.05}),railGlow=new THREE.MeshStandardMaterial({color:0x001018,emissive:0x2ee8ff,emissiveIntensity:2.2});
+  for(let f=1;f<=N;f++){const sd=f%2?1:-1,top={x:sd*11.9,y:f*FH},bot={x:sd*8.7,y:(f-1)*FH};const dx=bot.x-top.x,dy=bot.y-top.y,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx);
+    const g=new THREE.Group();g.position.set((top.x+bot.x)/2,(top.y+bot.y)/2,-.9);g.rotation.z=ang;
+    g.add(box(len,.25,1.4,stepM,0,0,0));g.add(box(len,.6,.05,glassM,0,.4,.7));g.add(box(len,.6,.05,glassM,0,.4,-.7));
+    g.add(box(len,.06,.08,railGlow,0,.72,.7));g.add(box(len,.06,.08,railGlow,0,.72,-.7));g.add(box(len,.35,.08,trim,0,-.25,.72));
+    world.add(g);
+    const sign=(txt,x,y)=>{const pl=new THREE.Mesh(new THREE.PlaneGeometry(.9,.45),new THREE.MeshBasicMaterial({map:numTex(txt)}));pl.position.set(x,y+2.6,-2.1);world.add(pl)};
+    sign('▼',top.x-sd*.3,top.y);sign('▲',bot.x+sd*.2,bot.y);
+    escs.push({f,top,bot,sd})}
   // shafts visuals
   for(const s of shafts){const y0=s.lo*FH,y1=s.hi*FH+FH-.4;const g=new THREE.Group();
     g.add(box(2.4,y1-y0,.3,shaftM,s.x,(y0+y1)/2,-2.1));for(const dx of[-1.15,1.15])g.add(box(.12,y1-y0,.3,railM,s.x+dx,(y0+y1)/2,-1.9));
@@ -191,7 +203,7 @@ const P={x:-4,f:0,y:0,vy:0,face:1,crouch:false,inS:null,inv:0,cool:0,alive:true,
 let player=null,state='menu',score=0,lives=3,filesTotal=0,filesGot=0,lastT=0,spawnT=3,camY=0,camX=0,dead=0,winT=0;
 const keys={L:false,R:false,U:false,D:false,F:false};let fireQ=false,upPress=false,downPress=false;
 function startLevel(){buildLevel();filesTotal=floors.reduce((a,f)=>a+f.doors.filter(d=>d.type==='red').length,0);filesGot=0;
-  if(player)scene.remove(player);player=makePerson(SPY);scene.add(player);Object.assign(P,{x:-4,f:N,y:6,vy:0,face:1,crouch:false,inS:null,inv:2,alive:true,doorT:0,door:null});
+  if(player)scene.remove(player);player=makePerson(SPY);scene.add(player);Object.assign(P,{esc:null,hide:null,door:null,cy:0,x:-4,f:N,y:6,vy:0,face:1,crouch:false,inS:null,inv:2,alive:true,doorT:0,door:null});
   spawnT=3;winT=0;camY=N*FH;banner($('banner'),`🕶️ Mission ${level}: grab ${filesTotal} files`,2200);hud()}
 function hud(){$('score').textContent=score;$('lives').textContent='❤️'.repeat(Math.max(0,lives));$('files').textContent=filesGot+'/'+filesTotal;$('floor').textContent=fl(P.f)}
 function shaftAt(f,x,m=1.15){return shafts.find(s=>f>=s.lo&&f<=s.hi&&Math.abs(s.x-x)<m)}
@@ -222,9 +234,11 @@ function update(dt){const t=performance.now()/1000;
     s.car.position.set(s.x,s.pos*FH,0)}
   if(state==='play'&&P.alive){
     P.inv=Math.max(0,P.inv-dt);P.cool=Math.max(0,P.cool-dt);
-    if(P.door){P.doorT-=dt;P.door.panel.scale.x=Math.max(.05,P.door.panel.scale.x-dt*4);if(P.doorT<=0){P.door.done=true;P.door.panel.material=doneDoorM;P.door.panel.scale.x=1;if(P.door.glow)P.door.glow.visible=false;filesGot++;score+=500;hud();S.file();banner($('banner'),filesGot>=filesTotal?'📁 All files! Get to the garage car!':`📁 File ${filesGot}/${filesTotal} +500`,1600);player.visible=true;P.door=null}}
+    if(P.esc){const E2=P.esc;E2.t+=dt/E2.dur;const k=Math.min(1,E2.t),e=k*k*(3-2*k);P.x=E2.a.x+(E2.b.x-E2.a.x)*e;P.cy=E2.a.y+(E2.b.y-E2.a.y)*e-E2.b.f*FH;P.f=E2.b.f;P.face=Math.sign(E2.b.x-E2.a.x)||P.face;P.walkT+=dt*7;if(k>=1){P.esc=null;P.cy=0}}
+    else if(P.hide){P.hideT-=dt;if(P.hideT<=0&&(upPress||downPress||fireQ||keys.L||keys.R)){P.hide.panel.scale.x=.1;const dd=P.hide;setTimeout(()=>dd.panel.scale.x=1,250);P.hide=null;P.inv=Math.max(P.inv,.4);player.visible=true;if(keys.L)P.face=-1;if(keys.R)P.face=1}}
+    else if(P.door){P.doorT-=dt;P.door.panel.scale.x=Math.max(.05,P.door.panel.scale.x-dt*4);if(P.doorT<=0){P.door.done=true;P.door.panel.material=doneDoorM;P.door.panel.scale.x=1;if(P.door.glow)P.door.glow.visible=false;filesGot++;score+=500;hud();S.file();banner($('banner'),filesGot>=filesTotal?'📁 All files! Get to the garage car!':`📁 File ${filesGot}/${filesTotal} +500`,1600);P.hide=P.door;P.hideT=.3;P.door.panel.scale.x=1;P.door=null}}
     else{
-      const onGround=P.y<=0;
+      const onGround=P.y<=0;if(!P.inS&&!P.esc)P.cy=0;
       P.crouch=keys.D&&onGround&&!P.inS&&!shaftAt(P.f,P.x,1.3);
       let mv=0;if(!P.crouch){if(keys.L)mv-=1;if(keys.R)mv+=1}if(mv)P.face=mv;
       if(P.inS&&!aligned(P.inS,P.f))mv=0;
@@ -234,10 +248,14 @@ function update(dt){const t=performance.now()/1000;
       const sHere=shaftAt(P.f,P.x,1.0);
       if(sHere&&aligned(sHere,P.f)){if(P.inS!==sHere){P.inS=sHere;P.lock=true;P.x=sHere.x;banner($('banner'),'🛗 Hold ▲ or ▼ to ride',900)}}else if(!sHere&&P.inS&&aligned(P.inS,P.f))P.inS=null;
       if(P.lock){if(!keys.L&&!keys.R)P.lock=false;else if(P.inS)P.x=P.inS.x}
-      if(P.inS){P.f=Math.round(P.inS.pos);P.y=0;P.vy=0;P.cy=(P.inS.pos-Math.round(P.inS.pos))*FH}else P.cy=0;
+      if(P.inS){P.f=Math.round(P.inS.pos);P.y=0;P.vy=0;P.cy=(P.inS.pos-Math.round(P.inS.pos))*FH}
       // up press: door / call elevator / jump
-      if(upPress&&!P.inS){const door=floors[P.f]&&floors[P.f].doors.find(d=>d.type==='red'&&!d.done&&Math.abs(d.x-P.x)<.9);const near=shaftAt(P.f,P.x,2.4);
-        if(door&&onGround){P.door=door;P.doorT=.8;P.x=door.x;player.visible=false}
+      const escUp=escs.find(e=>e.f-1===P.f&&Math.abs(P.x-e.bot.x)<1.1),escDn=escs.find(e=>e.f===P.f&&Math.abs(P.x-e.top.x)<1.1);
+      if(onGround&&!P.inS&&(escUp||escDn)&&!P.escHint){P.escHint=true;banner($('banner'),escUp?'▲ to ride the escalator up':'▼ to ride the escalator down',1200);setTimeout(()=>P.escHint=false,4000)}
+      if(upPress&&!P.inS&&onGround&&escUp){P.esc={a:{x:escUp.bot.x,y:escUp.bot.y},b:{x:escUp.top.x,y:escUp.top.y,f:escUp.f},t:0,dur:1.3};upPress=false}
+      if(downPress&&!P.inS&&onGround&&escDn){P.esc={a:{x:escDn.top.x,y:escDn.top.y},b:{x:escDn.bot.x,y:escDn.bot.y,f:escDn.f-1},t:0,dur:1.3};downPress=false;P.crouch=false}
+      if(upPress&&!P.inS){const door=floors[P.f]&&floors[P.f].doors.find(d=>Math.abs(d.x-P.x)<.9);const near=shaftAt(P.f,P.x,2.4);
+        if(door&&onGround){P.x=door.x;player.visible=false;door.panel.scale.x=.1;if(door.type==='red'&&!door.done){P.door=door;P.doorT=.8}else{P.hide=door;P.hideT=.35;setTimeout(()=>door.panel.scale.x=1,300);if(!P.hideHint){P.hideHint=true;banner($('banner'),'🚪 Hiding! Press any button to step out',1600)}}}
         else if(near&&!aligned(near,P.f)&&onGround){near.target=P.f;near.wait=3;banner($('banner'),'🛗 Elevator called',700)}
         else if(onGround){P.vy=9}}
       if(downPress&&!P.inS){const near=shaftAt(P.f,P.x,2.4);if(near&&!aligned(near,P.f)){near.target=P.f;near.wait=3;banner($('banner'),'🛗 Elevator called',700)}}
@@ -251,15 +269,15 @@ function update(dt){const t=performance.now()/1000;
   if(state==='win'){winT-=dt;const car=world.userData.car;car.position.x+=dt*(14-winT*4);if(winT<=0){level++;state='play';startLevel()}}
   // player pose
   if(player){const u=player.userData;player.position.set(P.x,P.f*FH+P.y+(P.cy||0),0);player.rotation.y=P.face>0?Math.PI/2:-Math.PI/2;
-    const moving=state==='play'&&!P.crouch&&(keys.L||keys.R)&&P.y===0;P.walkT+=moving?dt*10:0;u.legs[0].rotation.x=moving?Math.sin(P.walkT)*.6:0;u.legs[1].rotation.x=moving?-Math.sin(P.walkT)*.6:0;
+    const moving=state==='play'&&(P.esc||(!P.crouch&&(keys.L||keys.R)&&P.y===0&&!P.hide));P.walkT+=moving?dt*10:0;u.legs[0].rotation.x=moving?Math.sin(P.walkT)*.6:0;u.legs[1].rotation.x=moving?-Math.sin(P.walkT)*.6:0;
     u.g.scale.y+=((P.crouch?.6:1)-u.g.scale.y)*Math.min(1,dt*20);if(P.y>0){u.legs[0].rotation.x=.5;u.legs[1].rotation.x=-.3}
-    if(!P.door)player.visible=P.alive&&state!=='win'&&(P.inv<=0||Math.floor(t*12)%2===0)}
+    if(!P.door&&!P.hide)player.visible=P.alive&&state!=='win'&&(P.inv<=0||Math.floor(t*12)%2===0)}
   // doors anim
   for(const fo of floors)for(const d of fo.doors){if(d.open>0){d.open-=dt;d.panel.scale.x=d.open>0?.1:1}if(d.glow&&!d.done)d.glow.material.opacity=.45+Math.sin(t*4)*.2}
   // enemies
   if(state==='play'&&P.alive){spawnT-=dt;const cap=Math.min(2+level,6);if(spawnT<=0){if(enemies.length<cap)spawnEnemy();spawnT=Math.max(1.2,3.6-level*.3)+Math.random()*1.5}}
   for(const e of enemies){if(!e.alive)continue;const u=e.m.userData;e.emerge=Math.max(0,e.emerge-dt);
-    if(state==='play'&&P.alive&&e.emerge<=0){const same=e.f===P.f&&!(P.inS&&!aligned(P.inS,P.f))&&!P.door;
+    if(state==='play'&&P.alive&&e.emerge<=0){const same=e.f===P.f&&!(P.inS&&!aligned(P.inS,P.f))&&!P.door&&!P.hide&&!P.esc;
       const dx=P.x-e.x;
       if(same){e.face=Math.sign(dx)||e.face;let mv=0;if(Math.abs(dx)>e.stop)mv=e.face;else if(Math.abs(dx)<2.2)mv=-e.face;
         const nx=e.x+mv*2.4*dt;if(mv&&!blocked(e.f,nx,true))e.x=nx;e.walkT+=mv?dt*9:0;
@@ -273,7 +291,7 @@ function update(dt){const t=performance.now()/1000;
   for(const b of bullets){const px=b.x;b.x+=b.dir*b.v*dt;const lo=Math.min(px,b.x),hi=Math.max(px,b.x),sw=(x,r)=>x>=lo-r&&x<=hi+r;b.m.position.x=b.x;let dead=Math.abs(b.x)>WALL+.5||blocked(b.f,b.x,false)&&!(P.inS&&b.f===P.f&&Math.abs(b.x-P.inS.x)<1.15);
     if(!dead&&b.isP){for(const e of enemies){if(e.alive&&e.f===b.f&&e.emerge<=0&&sw(e.x,.45)&&b.y<(e.crouch?1.1:1.9)){e.alive=false;scene.remove(e.m);score+=100;hud();burst(e.x,e.f*FH+1.2,0xff6040);S.kill();dead=true;break}}
       if(!dead&&b.y>2.45)for(const l of lamps)if(l.state==='hang'&&l.f===b.f&&sw(l.x,.5)){l.state='fall';l.vy=0;dead=true;S.crash();burst(l.x,l.f*FH+3.2,0xffd890,10,4);break}}
-    if(!dead&&!b.isP&&P.alive&&b.f===P.f&&!P.door&&sw(P.x,.4)){const top=(P.crouch?1.0:1.9)+P.y,bot=P.y;if(b.y<top&&b.y>bot){hitPlayer();dead=true}}
+    if(!dead&&!b.isP&&P.alive&&b.f===P.f&&!P.door&&!P.hide&&!P.esc&&sw(P.x,.4)){const top=(P.crouch?1.0:1.9)+P.y,bot=P.y;if(b.y<top&&b.y>bot){hitPlayer();dead=true}}
     if(dead){b.dead=true;scene.remove(b.m)}}
   bullets=bullets.filter(b=>!b.dead);enemies=enemies.filter(e=>e.alive);
   // lamps
@@ -324,7 +342,7 @@ addEventListener('keydown',e=>{const k=KM[e.key];if(k){e.preventDefault();if(!ke
 addEventListener('keyup',e=>{const k=KM[e.key];if(k)keys[k]=false});
 document.addEventListener('touchmove',e=>{if(e.target.closest&&e.target.closest('.panel'))return;e.preventDefault()},{passive:false});
 
-window.__sa={P,get state(){return state},get enemies(){return enemies},get shafts(){return shafts},get floors(){return floors},get lamps(){return lamps},keys,tap(k){if(k==='U')upPress=true;if(k==='D')downPress=true;if(k==='F')fireQ=true},get files(){return[filesGot,filesTotal]}};
+window.__sa={P,get state(){return state},get enemies(){return enemies},get shafts(){return shafts},get floors(){return floors},get lamps(){return lamps},keys,tap(k){if(k==='U')upPress=true;if(k==='D')downPress=true;if(k==='F')fireQ=true},get files(){return[filesGot,filesTotal]},get escs(){return escs}};
 buildLevel();player=makePerson(SPY);scene.add(player);P.f=N;P.x=-4;camY=N*FH;sizeMap();$('loading').remove();requestAnimationFrame(loop);
 </script>
 </body>
