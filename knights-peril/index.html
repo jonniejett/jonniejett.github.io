@@ -19,6 +19,13 @@
   background:radial-gradient(circle,rgba(20,10,0,.75) 58%,transparent 60%),conic-gradient(#ffcf4a var(--p,100%),rgba(255,255,255,.15) 0);filter:drop-shadow(0 0 18px #ffae2a)}
 #prompt.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 #prompt.good{filter:drop-shadow(0 0 22px #5dff8a)}#prompt.bad{filter:drop-shadow(0 0 22px #ff3b3b)}
+#choice{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:8;width:min(92vw,520px);text-align:center;display:none;font-family:Georgia,serif}
+#choice.show{display:block;animation:pop .25s ease-out}@keyframes pop{from{transform:translate(-50%,-50%) scale(.8);opacity:0}}
+#choice .q{font-size:24px;color:#fff3d6;text-shadow:0 3px 12px #000;margin-bottom:10px}
+#choice .opts{display:flex;gap:10px}#choice button{flex:1;min-height:120px;border-radius:18px;border:2px solid #ffcf7a;background:rgba(20,12,6,.85);color:#fff;font:700 15px system-ui;padding:12px 10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;line-height:1.3}
+#choice button big{display:block;font-size:34px;margin-bottom:4px}#choice button small{display:block;font-weight:400;opacity:.8;font-size:12.5px;margin-top:4px}
+#choice .tip{font:12px system-ui;opacity:.7;margin-top:8px;text-shadow:0 1px 4px #000}
+#prompt.two{font-size:38px;width:150px;height:150px}
 #roomName{position:fixed;left:50%;top:22%;transform:translateX(-50%);text-align:center;z-index:6;pointer-events:none;opacity:0;transition:opacity .4s;font-family:Georgia,"Times New Roman",serif;text-shadow:0 3px 14px #000}
 #roomName small{display:block;font:700 12px system-ui;letter-spacing:.3em;color:#ffcf7a}
 #roomName b{font-size:34px;color:#fff3d6}
@@ -37,6 +44,7 @@
 <div class="center"><b id="score">0</b><small id="best">Best 0</small></div>
 <div id="roomName"><small id="roomNum">ROOM 1</small><b id="roomTitle">The Drawbridge</b></div>
 <div id="prompt">⬆️</div>
+<div id="choice"><div class="q" id="chQ">Which way?</div><div class="opts"><button id="chA"></button><button id="chB"></button></div><div class="tip">Tap a choice, or press ◀ / ▶</div></div>
 <div id="pad">
   <div class="cross"><div class="btn u" id="bU">▲</div><div class="btn l" id="bL">◀</div><div class="btn d" id="bD">▼</div><div class="btn r" id="bR">▶</div></div>
   <div class="btn sword" id="bS">⚔️</div>
@@ -47,6 +55,7 @@
   <p>The emerald dragon <b>Cindermaw</b> has locked old wizard <b>Bram</b> in a cage deep inside Blackthorn Keep. Guide <b>Sir Rowan</b> through 10 deadly rooms to set him free!</p>
   <p>⚡ When danger strikes, a <b>glowing icon</b> flashes. Hit that move before the ring runs out:</p>
   <p>▲ jump · ▼ duck · ◀ back off · ▶ dash ahead · ⚔️ swing your sword</p>
+  <p>🔀 <b>Your choices matter!</b> Pick which doors to take, whether to fight or slip past enemies, and which treasures to grab. Different choices lead to different rooms and <b>different endings</b>.</p>
   <p style="font-size:13px;opacity:.85">Swipe works too, and tapping the screen swings the sword. Wrong move or too slow? Sir Rowan meets a silly end and tries again. You have 5 lives.</p>
   <button id="go">Enter the Keep 🗡️</button>
 </div></div>
@@ -170,7 +179,7 @@ function makeDragon(){const g=new THREE.Group(),sc=std(0x1a7a4a,{roughness:.5,me
 
 // ---------- rooms (beats) ----------
 // beat: {h: hazard type, k: key ('up','down','left','right','sword', or 'lr' random)}
-const ROOMS=[
+const ROOMS_UNUSED=[
  {name:'The Drawbridge',beats:[{h:'pit',k:'up'},{h:'bats',k:'sword'},{h:'pit',k:'up'}]},
  {name:'Hall of Blades',beats:[{h:'blade',k:'down'},{h:'blade',k:'down'},{h:'ceiling',k:'right'}]},
  {name:'The Crypt',beats:[{h:'skeleton',k:'sword'},{h:'skeleton',k:'sword'},{h:'pit',k:'up'}]},
@@ -181,34 +190,73 @@ const ROOMS=[
  {name:'The Crumbling Stair',beats:[{h:'ceiling',k:'right'},{h:'pit',k:'up'},{h:'blade',k:'down'},{h:'boulder',k:'up'}]},
  {name:'The Treasure Vault',beats:[{h:'skeleton',k:'sword'},{h:'fire',k:'left'},{h:'boulder',k:'up'},{h:'arrows',k:'down'},{h:'goblin',k:'sword'}]},
  {name:"Cindermaw's Lair",dragon:true,beats:[{h:'dfire',k:'lr'},{h:'dtail',k:'up'},{h:'dclaw',k:'left'},{h:'dfire',k:'lr'},{h:'dbite',k:'down'},{h:'dfinal',k:'sword'},{h:'dfinal',k:'sword'},{h:'dfinal',k:'sword'}]}];
-const ICON={up:'⬆️',down:'⬇️',left:'⬅️',right:'➡️',sword:'⚔️'},BTN={up:'bU',down:'bD',left:'bL',right:'bR',sword:'bS'};
-const DEATH={pit:'Sir Rowan took the express route down. 🕳️',bats:'Carried off by a cloud of bats! 🦇',blade:'Close shave… a little too close. ✂️',ceiling:'Flattened like a pancake! 🥞',skeleton:'The skeleton dragged him into the crypt! 💀',boulder:'Rolled flat by a boulder! 🪨',fire:'Toasted to a crisp! 🔥',arrows:'Turned into a pincushion! 🏹',tilt:'He went for a swim… in lava! 🌋',goblin:'Bonked on the helmet by a goblin! 🍳',dfire:'Cindermaw had knight for lunch… well done. 🔥',dtail:'Swatted like a fly! 🐉',dclaw:'Squished by a dragon claw!',dbite:'CHOMP! 🐉',dfinal:'Cindermaw shrugged off the hit and roared! 🐉'};
+const RD={
+ drawbridge:{name:'The Drawbridge',th:0,beats:[{h:'pit',k:'up'},{h:'bats',k:'sword',alt:{k:'down',msg:'Ducked under the bats 🦇'}},{h:'pit',k:'up'}]},
+ blades:{name:'Hall of Blades',th:1,beats:[{h:'blade',k:'down'},{h:'blade',k:'down'},{h:'ceiling',k:'right'}]},
+ crypt:{name:'The Crypt',th:2,gold:1,beats:[{h:'skeleton',k:'sword',alt:{k:'right',msg:'Slipped past the skeleton 💨'}},{h:'skeleton',k:'sword',alt:{k:'right',msg:'Slipped past the skeleton 💨'}},{h:'pit',k:'up'}]},
+ armory:{name:'The Old Armory',th:7,beats:[{h:'blade',k:'down'},{h:'arrows',k:'down'},{h:'choice',q:'Two treasures hang on the wall. Take one:',opts:[{icon:'🛡️',label:'Enchanted Shield',desc:'Saves you from one mistake',fx:'shield'},{icon:'🗡️',label:'Silver Sword',desc:'Double points for sword hits, and a faster dragon fight',fx:'silver'}]}]},
+ stones:{name:'Rolling Stones',th:3,beats:[{h:'boulder',k:'up'},{h:'boulder',k:'up'},{h:'ceiling',k:'right'}]},
+ fire:{name:'The Fire Gallery',th:4,beats:[{h:'fire',k:'left'},{h:'arrows',k:'down'},{h:'fire',k:'left'}]},
+ bridge:{name:'Bridge of Embers',th:5,bridge:true,beats:[{h:'tilt',k:'lr'},{h:'tilt',k:'lr'},{h:'pit',k:'up'},{h:'tilt',k:'lr'}]},
+ tower:{name:"The Wizard's Tower",th:7,beats:[{h:'pit',k:'up'},{h:'bats',k:'sword',alt:{k:'down',msg:'Ducked under the bats 🦇'}},{h:'choice',q:'A glowing Moonstone sits on a pedestal…',opts:[{icon:'💎',label:'Grab the Moonstone',desc:'Legend says it can calm a dragon. Probably trapped!',fx:'moon'},{icon:'🚶',label:'Leave it alone',desc:'Play it safe',fx:'none'}]}]},
+ goblin:{name:'Goblin Kitchen',th:6,beats:[{h:'goblin',k:'sword',alt:{k:'up',msg:'Leapt over the goblin 🦘'}},{h:'arrows',k:'down'},{h:'goblin',k:'sword',alt:{k:'up',msg:'Leapt over the goblin 🦘'}},{h:'bats',k:'sword',alt:{k:'down',msg:'Ducked under the bats 🦇'}}]},
+ stair:{name:'The Crumbling Stair',th:7,beats:[{h:'ceiling',k:'right'},{h:'pit',k:'up'},{h:'blade',k:'down'},{h:'boulder',k:'up'}]},
+ vault:{name:'The Treasure Vault',th:8,beats:[{h:'skeleton',k:'sword',alt:{k:'right',msg:'Slipped past the skeleton 💨'}},{h:'choice',q:'Mountains of gold glitter all around you…',opts:[{icon:'💰',label:'Fill your pockets',desc:'Big bonus… if you survive what wakes up',fx:'gold'},{icon:'🚶',label:'Keep moving',desc:'Greed is dangerous',fx:'none'}]},{h:'fire',k:'left'},{h:'arrows',k:'down'}]},
+ secret:{name:'The Secret Passage',th:1,beats:[{h:'pit',k:'up'},{h:'bats',k:'sword',alt:{k:'down',msg:'Ducked under the bats 🦇'}}],sneak:true},
+ lair:{name:"Cindermaw's Lair",th:9,dragon:true,beats:[{h:'dfire',k:'lr'},{h:'dtail',k:'up'},{h:'dclaw',k:'left'},{h:'dfire',k:'lr'},{h:'dbite',k:'down'},{h:'dfinal',k:'sword'},{h:'dfinal',k:'sword'},{h:'dfinal',k:'sword'}]}};
+const PLAN=['drawbridge','blades',{q:'Two stairways lead on…',opts:[{icon:'💀',label:'Down to the Crypt',desc:'Skeletons guard forgotten gold',id:'crypt'},{icon:'🛡️',label:'Up to the Armory',desc:'Old traps… and maybe new gear',id:'armory'}]},'stones','fire',
+ {q:'The hallway splits…',opts:[{icon:'🌋',label:'Bridge of Embers',desc:'A shaky bridge over lava',id:'bridge'},{icon:'🔮',label:"The Wizard's Tower",desc:'Something magic glows up there',id:'tower'}]},'goblin','stair',
+ {q:'Cindermaw\'s lair is close. How do you go in?',opts:[{icon:'💰',label:'Through the Treasure Vault',desc:'Dangerous, but full of gold',id:'vault'},{icon:'🤫',label:'Take the Secret Passage',desc:'Sneak up on the sleeping dragon',id:'secret'}]},'lair'];
+let curRoom=null,flags={},pathNames=[];
+function cloneRoom(id){const r=RD[id];return{...r,id,beats:r.beats.map(b=>({...b}))}}
+const ICON2={};const ICON={up:'⬆️',down:'⬇️',left:'⬅️',right:'➡️',sword:'⚔️'},BTN={up:'bU',down:'bD',left:'bL',right:'bR',sword:'bS'};
+const DEATH={pit:'Sir Rowan took the express route down. 🕳️',bats:'Carried off by a cloud of bats! 🦇',blade:'Close shave… a little too close. ✂️',ceiling:'Flattened like a pancake! 🥞',skeleton:'The skeleton dragged him into the crypt! 💀',boulder:'Rolled flat by a boulder! 🪨',fire:'Toasted to a crisp! 🔥',arrows:'Turned into a pincushion! 🏹',tilt:'He went for a swim… in lava! 🌋',goblin:'Bonked on the helmet by a goblin! 🍳',dfire:'Cindermaw had knight for lunch… well done. 🔥',dtail:'Swatted like a fly! 🐉',dclaw:'Squished by a dragon claw!',dbite:'CHOMP! 🐉',dfinal:'Cindermaw shrugged off the hit and roared! 🐉',dtame:'Cindermaw wasn\'t in the mood… 🔥'};
 
 // ---------- game flow ----------
 let state='menu',roomI=0,beatI=0,score=0,lives=5,phase=null,pT=0,beat=null,hz=null,kx=0,lastT=0,need=null,window_=1.2,dragon=null,cage=null,wizard=null,perfect=true,deaths=0;
 const camPos=new THREE.Vector3();let camX=0;
 function hud(){$('score').textContent=score;$('lives').textContent='🛡️'.repeat(Math.max(0,lives));$('room').textContent=(roomI+1)+'/10'}
-function startGame(){audio();score=0;lives=5;roomI=0;deaths=0;$('ov').classList.add('hidden');startRoom()}
-function startRoom(){const R=ROOMS[roomI];beatI=0;perfect=true;const len=R.dragon?22:R.beats.length*7+8;buildRoom(len,THEMES[roomI],{bridge:R.bridge});kx=-6;camX=kx+3;burn(false);K.visible=true;
+function startGame(){audio();score=0;lives=5;roomI=0;deaths=0;flags={shield:false,silver:false,moon:false,gold:0,slain:0,spared:0,sneak:false,tame:false};pathNames=[];curRoom=cloneRoom(PLAN[0]);$('ov').classList.add('hidden');startRoom()}
+function startRoom(){const R=curRoom;beatI=0;perfect=true;
+  if(R.dragon&&flags.sneak){R.beats=R.beats.slice(2);setTimeout(()=>banner($('banner'),'🤫 You sneak in while Cindermaw dozes!',1800),1900)}
+  if(R.dragon&&flags.silver){const i=R.beats.findIndex(b=>b.h==='dfinal');if(i>=0)R.beats.splice(i,1)}
+  if(R.dragon&&flags.moon){const i=R.beats.findIndex(b=>b.h==='dfinal');R.beats.splice(i,0,{h:'choice',q:'Cindermaw rears up for the final clash…',opts:[{icon:'⚔️',label:'Fight!',desc:'Drive the dragon out with your sword',fx:'none'},{icon:'💎',label:'Raise the Moonstone',desc:'Try to calm the beast',fx:'tame'}]})}const len=R.dragon?22:R.beats.length*7+8;buildRoom(len,THEMES[R.th],{bridge:R.bridge});pathNames.push(R.name);kx=-6;camX=kx+3;burn(false);K.visible=true;
   dragon=wizard=cage=null;if(R.dragon){dragon=makeDragon();dragon.position.set(15,0,-.3);dragon.scale.setScalar(1.3);roomG.add(dragon);cage=makeCage();cage.position.set(21.5,2.2,-1);roomG.add(cage);wizard=makeWizard();wizard.position.set(21.5,2.25,-1);roomG.add(wizard)}
   $('roomNum').textContent='ROOM '+(roomI+1);$('roomTitle').textContent=R.name;$('roomName').classList.add('show');setTimeout(()=>$('roomName').classList.remove('show'),1800);
   state='play';setPhase('intro',1.6);hud();window_=Math.max(.75,1.35-roomI*.06)}
 function setPhase(p,t){phase=p;pT=0;phase_len=t}
 let phase_len=1;
 function beatX(i){return i*7+2}
-function nextBeat(){const R=ROOMS[roomI];if(beatI>=R.beats.length){roomClear();return}beat={...R.beats[beatI]};if(beat.k==='lr')beat.k=Math.random()<.5?'left':'right';need=beat.k;setupHazard();setPhase('approach',.9)}
-function roomClear(){score+=1000*(roomI+1)+(perfect?500:0);hud();S.good();if(perfect)banner($('banner'),'✨ Perfect room! +500',1300);
-  if(ROOMS[roomI].dragon){win();return}setPhase('exit',1.6)}
-function win(){state='won';S.fanfare();const nb=score>best;if(nb){best=score;store.set('best',best);$('best').textContent='Best '+best}
-  setTimeout(()=>{$('panel').innerHTML=`<h2>🏆 Victory!</h2><p>Cindermaw flees the keep and Sir Rowan frees <b>Wizard Bram</b>!</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>Silly endings along the way: ${deaths}</p><p>Best: ${best}</p><button id="go">Play again</button>`;$('ov').classList.remove('hidden');$('go').onclick=startGame},3200)}
-function input(k){if(state!=='play')return;audio();const b=$(BTN[k]);if(b){b.classList.add('on');setTimeout(()=>b.classList.remove('on'),120)}
-  if(phase!=='prompt')return;if(k===need){score+=100*(roomI+1)+Math.round((1-pT/phase_len)*100);hud();S.good();$('prompt').classList.add('good');hidePrompt();setPhase('win',hz.winLen||1.1);if(hz.onWin)hz.onWin()}else{failBeat()}}
-function failBeat(){perfect=false;deaths++;S.yell();vibrate(220);$('prompt').classList.add('bad');hidePrompt();setPhase('fail',hz.failLen||1.8);if(hz.onFail)hz.onFail()}
-function showPrompt(){const p=$('prompt');p.textContent=ICON[need];p.className='show';$(BTN[need]).classList.add('hint');S.cue()}
+function nextBeat(){const R=curRoom;if(beatI>=R.beats.length){roomClear();return}beat={...R.beats[beatI]};
+  if(beat.h==='choice'){clearHazard();hz={objs:[],h:'choice',stand:kx,tele:()=>{}};setPhase('wait',99);showChoice(beat.q,beat.opts,o=>{applyFx(o.fx);beatI++;if(state==='play'&&phase==='wait')nextBeat()});return}if(beat.k==='lr')beat.k=Math.random()<.5?'left':'right';need=beat.k;setupHazard();setPhase('approach',.9)}
+function roomClear(){if(curRoom.gold){flags.gold+=curRoom.gold;score+=500;setTimeout(()=>banner($('banner'),'💰 You found old gold in the crypt! +500',1500),1400)}if(curRoom.sneak)flags.sneak=true;score+=1000*(roomI+1)+(perfect?500:0);hud();S.good();if(perfect)banner($('banner'),'✨ Perfect room! +500',1300);
+  if(curRoom.dragon){win();return}setPhase('exit',1.6)}
+function win(){state='won';S.fanfare();let title,story,bonus=0;
+  if(flags.tame){title='🐉💎 The Dragon Whisperer';story='You raised the Moonstone and Cindermaw grew calm. The dragon bowed, freed Wizard Bram, and now guards Blackthorn Keep as your friend!';bonus+=3000}
+  else{title='⚔️ The Dragon Slayer';story='Three mighty strikes sent Cindermaw fleeing into the night. Wizard Bram is free!'}
+  const extra=[];if(flags.gold>=3){extra.push('💰 …and you walked out rich with the dragon\'s gold!');bonus+=flags.gold*500}else if(flags.gold>0){extra.push('💰 You kept a little gold for your trouble.');bonus+=flags.gold*500}
+  if(flags.spared>flags.slain)extra.push('🕊️ Known across the land as the Merciful Knight.');else if(flags.slain>0)extra.push('🛡️ Bards sing of the Fearless Knight.');
+  score+=bonus;hud();const nb=score>best;if(nb){best=score;store.set('best',best);$('best').textContent='Best '+best}
+  setTimeout(()=>{$('panel').innerHTML=`<h2>${title}</h2><p>${story}</p>${extra.map(e=>'<p>'+e+'</p>').join('')}<p style="font-size:13px;opacity:.8">Your path: ${pathNames.join(' → ')}</p>${bonus?'<p>Ending bonus: +'+bonus+'</p>':''}<p style="font-size:13px;opacity:.85">Try different choices to discover the other endings!</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>Silly endings along the way: ${deaths}</p><p>Best: ${best}</p><button id="go">Play again</button>`;$('ov').classList.remove('hidden');$('go').onclick=startGame},3200)}
+let choiceCb=null,choiceOpts=null;
+function showChoice(q,opts,cb){choiceCb=cb;choiceOpts=opts;$('chQ').textContent=q;const bs=[$('chA'),$('chB')];opts.forEach((o,i)=>{bs[i].innerHTML=`<big>${o.icon}</big>${i?'▶ ':'◀ '}${o.label}<small>${o.desc}</small>`;bs[i].onclick=()=>pick(i)});$('choice').classList.add('show');S.cue();$('bL').classList.add('hint');$('bR').classList.add('hint')}
+function pick(i){if(!choiceCb)return;const cb=choiceCb,o=choiceOpts[i];choiceCb=null;$('choice').classList.remove('show');$('bL').classList.remove('hint');$('bR').classList.remove('hint');S.good();cb(o)}
+function applyFx(fx){if(fx==='shield'){flags.shield=true;banner($('banner'),'🛡️ Enchanted Shield! It will save you once.',1800)}
+  else if(fx==='silver'){flags.silver=true;kb.blade.material.color.setHex(0xffffff);kb.blade.material.emissive.setHex(0x80a0ff);banner($('banner'),'🗡️ Silver Sword! Double sword points.',1800)}
+  else if(fx==='moon'){flags.moon=true;score+=300;banner($('banner'),'💎 You grabbed the Moonstone… the ceiling rumbles!',1800);curRoom.beats.splice(beatI+1,0,{h:'ceiling',k:'right'});hud()}
+  else if(fx==='gold'){flags.gold+=3;score+=1500;banner($('banner'),'💰 +1500 gold… and the boulders wake up!',1800);curRoom.beats.splice(beatI+1,0,{h:'boulder',k:'up'},{h:'boulder',k:'up'});hud()}
+  else if(fx==='tame'){flags.tame=true;curRoom.beats=curRoom.beats.slice(0,beatI+1);curRoom.beats.push({h:'dtame',k:'up'})}}
+function genericWin(key){const bx=kx;return k=>{if(key==='down'){if(k<.5)pose('duck',k);else{kx=bx+(k-.5)/.5*7;pose('run',k*3)}}else if(key==='up'){K.position.y=Math.sin(Math.min(1,k*1.6)*Math.PI)*2.4;pose('jump',k);if(k>.6){kx=bx+(k-.6)/.4*7;pose('run',k*3)}}else if(key==='right'){kx=bx+k*7.5;pose('run',k*4)}else if(key==='left'){if(k<.5){kx=bx-k*2;pose('back',k)}else{kx=bx-1+(k-.5)/.5*8;pose('run',k*3)}}else{pose('slash',k*1.6);if(k>.55){kx=bx+(k-.55)/.45*7;pose('run',k*3)}}}}
+function input(k){if(choiceCb){if(k==='left')pick(0);else if(k==='right')pick(1);return}if(state!=='play')return;audio();const b=$(BTN[k]);if(b){b.classList.add('on');setTimeout(()=>b.classList.remove('on'),120)}
+  if(phase!=='prompt')return;
+  if(beat.alt&&k===beat.alt.k&&k!==need){score+=50*(roomI+1);flags.spared++;hud();S.good();$('prompt').classList.add('good');hidePrompt();banner($('banner'),beat.alt.msg,1000);if(hz.objs)hz.objs.forEach(o=>{o.userData.fadeT=1});hz.win=genericWin(k);setPhase('win',1);return}
+  if(k===need){if(['bats','skeleton','goblin'].includes(beat.h))flags.slain++;score+=(100*(roomI+1)+Math.round((1-pT/phase_len)*100))*(need==='sword'&&flags.silver?2:1);hud();S.good();$('prompt').classList.add('good');hidePrompt();setPhase('win',hz.winLen||1.1);if(hz.onWin)hz.onWin()}else{failBeat()}}
+function failBeat(){if(flags.shield){flags.shield=false;S.clang();hidePrompt();banner($('banner'),'🛡️ The Enchanted Shield saved you!',1500);hz.win=genericWin(need);setPhase('win',1);return}perfect=false;deaths++;S.yell();vibrate(220);$('prompt').classList.add('bad');hidePrompt();setPhase('fail',hz.failLen||1.8);if(hz.onFail)hz.onFail()}
+function showPrompt(){const p=$('prompt');if(beat.alt){p.textContent=ICON[need]+' '+ICON[beat.alt.k];p.className='show two';$(BTN[beat.alt.k]).classList.add('hint')}else{p.textContent=ICON[need];p.className='show'}$(BTN[need]).classList.add('hint');S.cue()}
 function hidePrompt(){setTimeout(()=>{$('prompt').className=''},220);for(const id of Object.values(BTN))$(id).classList.remove('hint')}
 function afterFail(){lives--;hud();if(lives<=0){state='over';const nb=score>best;if(nb){best=score;store.set('best',best);$('best').textContent='Best '+best}
-    $('panel').innerHTML=`<h2>Game over</h2><p>${DEATH[beat.h]}</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>You reached room ${roomI+1}: ${ROOMS[roomI].name}</p><p>Best: ${best}</p><button id="go">Try again</button>`;$('ov').classList.remove('hidden');$('go').onclick=startGame;return}
-  clearHazard();burn(false);K.visible=true;kx=ROOMS[roomI].dragon?4:beatX(beatI)-3.2;nextBeat()}
+    $('panel').innerHTML=`<h2>Game over</h2><p>${DEATH[beat.h]}</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>You reached room ${roomI+1}: ${curRoom.name}</p><p>Best: ${best}</p><button id="go">Try again</button>`;$('ov').classList.remove('hidden');$('go').onclick=startGame;return}
+  clearHazard();burn(false);K.visible=true;kx=curRoom.dragon?4:beatX(beatI)-3.2;nextBeat()}
 
 // ---------- hazards ----------
 function clearHazard(){if(hz&&hz.objs)hz.objs.forEach(o=>o.parent&&o.parent.remove(o));if(hz&&hz.tiles)hz.tiles.forEach(t=>{t.visible=true;t.position.y=t.userData.y0??t.position.y});hz=null}
@@ -259,9 +307,12 @@ function setupHazard(){clearHazard();const bx=beatX(beatI),h=beat.h;hz={objs:[],
     else if(h==='dtail'){hz.tele=k=>{D.tsegs.forEach((s,i)=>s.rotation.y=k*.4)};hz.win=k=>{K.position.y=Math.sin(k*Math.PI)*2.4;pose('jump',k);D.tsegs.forEach((s,i)=>s.rotation.y=.4-Math.sin(k*Math.PI)*.9)};hz.fail=k=>{D.tsegs.forEach(s=>s.rotation.y=.4-k*1.2);if(k>.3){kx=hz.stand-(k-.3)*12;K.position.y=Math.sin(Math.min(1,(k-.3)*2)*Math.PI)*3;pose('flail',k)}}}
     else if(h==='dclaw'){hz.tele=k=>{D.claw.position.y=.25+k*2.5};hz.win=k=>{D.claw.position.y=2.75-Math.min(1,k*3)*2.5;kx=hz.stand-Math.min(1,k*3)*1.8;pose('back',k);if(k>.6)kx=hz.stand-1.8+(k-.6)*4.5};hz.fail=k=>{D.claw.position.y=2.75-Math.min(1,k*3)*2.5;if(k>.25)pose('flat',k)}}
     else if(h==='dbite'){hz.tele=k=>{D.head.rotation.z=k*.4;D.jaw.rotation.z=k*.8};hz.win=k=>{D.jaw.rotation.z=.8-Math.min(1,k*3)*.8;pose(k<.5?'duck':'idle',k);if(k>.25&&!hz.b){hz.b=1;S.clang()}};hz.fail=k=>{D.jaw.rotation.z=.8-Math.min(1,k*3)*.8;if(k>.3)K.visible=false}}
+    else if(h==='dtame'){hz.tele=k=>{D.head.rotation.z=-k*.3};hz.winLen=3;
+      hz.win=k=>{pose('jump',.2);K.position.y=0;kb.armS.rotation.z=-2.6;if(Math.random()<.5)flames(kx+.3,2.8,0,(Math.random()-.5)*.2,3,1,0x9fd8ff);D.head.rotation.z=.5*Math.min(1,k*2);D.jaw.rotation.z=0;D.segs.forEach(sg=>sg.rotation.z=.12*Math.min(1,k*2));if(k>.4){cage.position.y=Math.max(0,2.2-(k-.4)*4);wizard.position.y=cage.position.y+.05}if(k>.7)cage.visible=Math.floor(k*30)%2===0};
+      hz.fail=k=>{pose('flail',k);if(k<.6)flames(dragon.position.x-3.3,1.6,0,-1,.6,3);if(k>.2&&!hz.b){hz.b=1;burn(true);S.fire()}}}
     else if(h==='dfinal'){hz.tele=k=>{D.head.rotation.z=-k*.3;kb.blade.material.emissiveIntensity=.2+k*4};
       hz.win=k=>{kx=hz.stand+Math.sin(Math.min(1,k*2)*Math.PI)*1.5;pose('slash',k*1.6);if(k>.3&&!hz.b){hz.b=1;S.clang();S.roar();for(let i=0;i<14;i++)flames(dragon.position.x-2.5,2.5,0,(Math.random()-.5)*.4,2,1,0x80c0ff)}D.head.rotation.z=.3*Math.sin(k*10);
-        if(beatI===ROOMS[roomI].beats.length-1&&k>.5){dragon.position.x+=.25;dragon.position.y+=.1;D.wings.forEach((w,i)=>w.rotation.x=Math.sin(performance.now()/90)*(i?1:-1)*.6);cage.position.y+=.05;cage.rotation.y+=.05}};
+        if(beatI===curRoom.beats.length-1&&k>.5){dragon.position.x+=.25;dragon.position.y+=.1;D.wings.forEach((w,i)=>w.rotation.x=Math.sin(performance.now()/90)*(i?1:-1)*.6);cage.position.y+=.05;cage.rotation.y+=.05}};
       hz.fail=k=>{if(k>.2){kx=hz.stand-(k-.2)*10;K.position.y=Math.sin(Math.min(1,(k-.2)*2)*Math.PI)*2;pose('flail',k)}}}
     hz.stand=7}
   hz.tele=hz.tele||(()=>{})}
@@ -272,14 +323,16 @@ function update(dt){const t=performance.now()/1000;
   if(dragon&&!(hz&&hz.h&&hz.h.startsWith('d')&&(phase==='win'||phase==='fail'))){const D=dragon.userData;D.segs.forEach((s,i)=>s.rotation.z=Math.sin(t*1.5-i*.4)*.08);D.wings.forEach((w,i)=>w.rotation.y=Math.sin(t*1.2)*.15*(i?1:-1));D.tsegs.forEach((s,i)=>s.rotation.y=Math.sin(t*2-i*.5)*.15);if(Math.random()<.04)smoke(dragon.position.x-3.6,2.4,1)}
   if(wizard)wizard.rotation.y=Math.sin(t)*.3;
   if(state==='play'){pT+=dt;const k=Math.min(1,pT/phase_len);K.position.y=0;
-    if(phase==='intro'){kx=-6+k*2;pose('run',t);if(k>=1){nextBeat()}}
+    if(phase==='wait'){pose('idle',t)}
+    else if(phase==='intro'){kx=-6+k*2;pose('run',t);if(k>=1){nextBeat()}}
     else if(phase==='approach'){const from=hz._from??(hz._from=kx);kx=from+(hz.stand-from)*k;pose('run',t);if(k>=1)setPhase('tele',.7)}
     else if(phase==='tele'){hz.tele(k);pose('idle',t);if(k>=1){setPhase('prompt',window_);showPrompt()}}
     else if(phase==='prompt'){hz.tele(1);pose('idle',t);$('prompt').style.setProperty('--p',((1-k)*100)+'%');if(k>=1)failBeat()}
     else if(phase==='win'){hz.win(k);if(k>=1){beatI++;const keep=hz.h;if(!keep.startsWith('d')){/* keep debris */}clearHazard();K.rotation.x=0;K.position.z=0;kb.blade.material.emissiveIntensity=.2;nextBeat()}}
     else if(phase==='fail'){hz.fail(k);if(k>=1){banner($('banner'),DEATH[beat.h],1600);K.rotation.x=0;K.position.z=0;kb.blade.material.emissiveIntensity=.2;afterFail()}}
-    else if(phase==='exit'){const L=ROOMS[roomI].beats.length*7+8;kx=beatX(beatI)-3.2+k*(L+4-(beatX(beatI)-3.2));pose('run',t);roomG.userData.leaf.rotation.y=-Math.min(1,k*2)*1.4;if(k>=1){roomI++;startRoom()}}}
-  if(state==='won'){pose('idle',t);if(dragon){dragon.position.x+=dt*6;dragon.position.y+=dt*3}if(cage){cage.position.y+=dt*2;if(wizard)wizard.position.y=2.55}}
+    else if(phase==='exit'){const L=curRoom.beats.length*7+8;kx=beatX(beatI)-3.2+k*(L+4-(beatX(beatI)-3.2));pose('run',t);roomG.userData.leaf.rotation.y=-Math.min(1,k*2)*1.4;if(k>=1){roomI++;const slot=PLAN[roomI];if(typeof slot==='string'){curRoom=cloneRoom(slot);startRoom()}else{setPhase('wait',99);showChoice(slot.q,slot.opts,o=>{curRoom=cloneRoom(o.id);startRoom()})}}}}
+  if(state==='won'){pose('idle',t);if(dragon&&!flags.tame){dragon.position.x+=dt*6;dragon.position.y+=dt*3}if(cage){cage.position.y+=dt*2;if(wizard)wizard.position.y=2.55}}
+  if(hz&&hz.objs)for(const o of hz.objs)if(o.userData.fadeT>0){o.userData.fadeT-=dt*.8}
   K.position.x=kx;
   // particles
   for(const f of fireParts){f.l-=dt;f.s.position.x+=f.vx*dt;f.s.position.y+=f.vy*dt;f.s.position.z+=f.vz*dt;const s=1.2+(1-f.l)*2.2;f.s.scale.set(s,s,1);f.s.material.opacity=Math.max(0,f.l);f.s.material.color.setHSL(.1-(1-f.l)*.08,1,.6);if(f.l<=0){scene.remove(f.s);f.dead=true}}
@@ -307,7 +360,7 @@ cv.addEventListener('mousedown',()=>input('sword'));
 addEventListener('keydown',e=>{const k={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',' ':'sword',Enter:'sword'}[e.key];if(k){e.preventDefault();if(state==='play')input(k);else if(!$('ov').classList.contains('hidden')&&(e.key==='Enter'||e.key===' '))startGame()}});
 document.addEventListener('touchmove',e=>{if(!e.target.closest||!e.target.closest('.panel'))e.preventDefault()},{passive:false});
 
-window.__kp={get state(){return state},get phase(){return phase},get need(){return need},get room(){return roomI},set room(v){roomI=v},input,startRoom,get lives(){return lives},get beatI(){return beatI}};
+window.__kp={pick,goto(id){curRoom=cloneRoom(id);startRoom()},get flags(){return flags},get curRoom(){return curRoom},get choosing(){return !!choiceCb},get state(){return state},get phase(){return phase},get need(){return need},get room(){return roomI},set room(v){roomI=v},input,startRoom,get lives(){return lives},get beatI(){return beatI}};
 buildRoom(30,THEMES[0]);kx=0;pose('idle',0);$('loading').remove();requestAnimationFrame(loop);
 </script>
 </body>
