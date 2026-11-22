@@ -36,10 +36,10 @@
 <div class="overlay" id="ov"><div class="panel" id="panel">
   <h2>Skyline <span>Agent</span></h2>
   <p>You've dropped onto the roof of an enemy tower. Work your way down, grab every 📁 <b>secret file</b> behind the <b style="color:#ff5a6a">red doors</b>, and escape in the getaway car in the garage.</p>
-  <p>◀ ▶ walk · <b>▲</b> jump, go into a door, ride an escalator or elevator up · <b>▼</b> duck, ride down · <b>FIRE</b> shoot</p>
-  <p>🚪 Duck into <b>any door</b> to hide from bullets, then press any button to step back out. 🪜 <b>Escalators</b> at the ends of each floor take you up or down one floor.</p>
+  <p>◀ ▶ walk · <b>▲</b> jump or go into a door · <b>▼</b> duck · <b>FIRE</b> shoot</p>
+  <p>🚪 Duck into <b>any door</b> to hide from bullets, then press any button to step back out. 🪜 Every floor has an <b>UP</b> escalator at one end and a <b>DOWN</b> escalator at the other. Just walk onto one to ride it.</p>
   <p>💡 Jump and shoot a ceiling lamp to drop it on agents below. Duck under high shots, jump over low ones.</p>
-  <p style="font-size:13px;opacity:.8">At an elevator, press ▲ or ▼ to call it, step in, then hold ▲/▼ to ride. The map on the right shows where the files are.</p>
+  <p style="font-size:13px;opacity:.8">Elevators go up and down on their own and stop at every floor. Step in, and step off when it stops at the floor you want. The map on the right shows where the files are.</p>
   <button id="go">Drop in 🕶️</button>
 </div></div>
 
@@ -127,7 +127,7 @@ function rnd(a,b){return a+Math.random()*(b-a)}
 function buildLevel(){world.clear();floors=[];shafts=[];lamps=[];for(const e of enemies)scene.remove(e.m);enemies=[];for(const b of bullets)scene.remove(b.m);bullets=[];
   N=Math.min(10+level*2,22);
   // shafts: chain segments that overlap one floor so you transfer between them
-  const xs=[-6,5,-2,6.5,-4.5,2];let top=N,i=0;while(top>0){const lo=Math.max(0,top-(4+Math.floor(Math.random()*2)));shafts.push({x:xs[i%xs.length],lo,hi:top,pos:top,target:top,wait:1,dir:0});top=lo;i++}
+  const xs=[-6,5,-2,6.5,-4.5,2];let top=N,i=0;while(top>0){const lo=Math.max(0,top-(4+Math.floor(Math.random()*2)));shafts.push({x:xs[i%xs.length],lo,hi:top,pos:top,next:top,dir:-1,pause:Math.random()*2});top=lo;i++}
   shafts[shafts.length-1].lo=0;
   const nearShaft=(f,x,m)=>shafts.some(s=>f>=s.lo&&f<=s.hi&&Math.abs(s.x-x)<m);
   // floors
@@ -173,13 +173,15 @@ function buildLevel(){world.clear();floors=[];shafts=[];lamps=[];for(const e of 
   // escalators: every floor f>=1 links down to f-1, alternating ends
   escs=[];const escSteps=canvasTex(64,64,(g,w,h)=>{g.fillStyle='#2a2c34';g.fillRect(0,0,w,h);g.fillStyle='#8a8f9c';for(let y=0;y<h;y+=8)g.fillRect(0,y,w,2)},{repeat:[1,8]});
   const stepM=new THREE.MeshStandardMaterial({map:escSteps,metalness:.7,roughness:.35}),glassM=new THREE.MeshStandardMaterial({color:0x9fd8ff,transparent:true,opacity:.18,metalness:.2,roughness:.05}),railGlow=new THREE.MeshStandardMaterial({color:0x001018,emissive:0x2ee8ff,emissiveIntensity:2.2});
+  const bigSign=(txt,x,y,c)=>{const tx=canvasTex(256,96,(g,w,h)=>{g.fillStyle='#0a0a12';g.fillRect(0,0,w,h);g.strokeStyle='#'+c.toString(16).padStart(6,'0');g.lineWidth=6;g.strokeRect(4,4,w-8,h-8);g.fillStyle=g.strokeStyle;g.font='900 46px system-ui,sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(txt,w/2,h/2+2)});
+    const pl=new THREE.Mesh(new THREE.PlaneGeometry(1.6,.6),new THREE.MeshStandardMaterial({map:tx,emissive:0xffffff,emissiveMap:tx,emissiveIntensity:1.4}));pl.position.set(x,y+2.7,-2.1);world.add(pl)};
   for(let f=1;f<=N;f++){const sd=f%2?1:-1,top={x:sd*11.9,y:f*FH},bot={x:sd*8.7,y:(f-1)*FH};const dx=bot.x-top.x,dy=bot.y-top.y,len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx);
     const g=new THREE.Group();g.position.set((top.x+bot.x)/2,(top.y+bot.y)/2,-.9);g.rotation.z=ang;
     g.add(box(len,.25,1.4,stepM,0,0,0));g.add(box(len,.6,.05,glassM,0,.4,.7));g.add(box(len,.6,.05,glassM,0,.4,-.7));
     g.add(box(len,.06,.08,railGlow,0,.72,.7));g.add(box(len,.06,.08,railGlow,0,.72,-.7));g.add(box(len,.35,.08,trim,0,-.25,.72));
     world.add(g);
     const sign=(txt,x,y)=>{const pl=new THREE.Mesh(new THREE.PlaneGeometry(.9,.45),new THREE.MeshBasicMaterial({map:numTex(txt)}));pl.position.set(x,y+2.6,-2.1);world.add(pl)};
-    sign('▼',top.x-sd*.3,top.y);sign('▲',bot.x+sd*.2,bot.y);
+    bigSign('DOWN ▼',top.x-sd*1.1,top.y,0xff5a6a);bigSign('UP ▲',bot.x+sd*.6,bot.y,0x40ff80);
     escs.push({f,top,bot,sd})}
   // shafts visuals
   for(const s of shafts){const y0=s.lo*FH,y1=s.hi*FH+FH-.4;const g=new THREE.Group();
@@ -228,13 +230,15 @@ function update(dt){const t=performance.now()/1000;
   if(world.userData.beacon)world.userData.beacon.material.opacity=Math.floor(t*1.5)%2?1:.15;
   // elevators
   for(const s of shafts){const ride=P.inS===s;
-    if(ride&&state==='play'&&P.alive&&!P.door){if(keys.U&&s.pos<s.hi-.001){s.target=Math.min(s.hi,Math.floor(s.pos+1e-3)+1)}else if(keys.D&&s.pos>s.lo+.001){s.target=Math.max(s.lo,Math.ceil(s.pos-1e-3)-1)}}
-    else if(!ride){const atT=Math.abs(s.pos-s.target)<.001;const waiting=atT&&P.alive&&Math.round(s.pos)===P.f&&Math.abs(P.x-s.x)<3;if(atT&&!waiting)s.wait-=dt;if(s.wait<=0&&atT){s.target=s.lo+Math.floor(Math.random()*(s.hi-s.lo+1));s.wait=2.5+Math.random()*2}}
-    const d=s.target-s.pos;if(Math.abs(d)>.001){const step=Math.sign(d)*Math.min(Math.abs(d),dt*2.2);s.pos+=step;if(Math.abs(s.target-s.pos)<.001){s.pos=s.target;if(ride)S.ding()}}
+    if(s.pause>0){const near=!ride&&state==='play'&&P.alive&&Math.round(s.pos)===P.f&&Math.abs(P.x-s.x)<2.4&&!P.hide;
+      s.pause=near?Math.max(s.pause,.5):s.pause-dt;
+      if(ride&&(upPress||downPress)){const d=upPress?1:-1;if((d>0&&s.pos<s.hi)||(d<0&&s.pos>s.lo)){s.dir=d;s.pause=0}}
+      if(s.pause<=0){if(s.pos>=s.hi)s.dir=-1;else if(s.pos<=s.lo)s.dir=1;s.next=Math.round(s.pos)+s.dir}}
+    else{s.pos+=s.dir*dt*2.0;if((s.dir>0&&s.pos>=s.next)||(s.dir<0&&s.pos<=s.next)){s.pos=s.next;s.pause=ride?1.6:1.1;if(ride)S.ding()}}
     s.car.position.set(s.x,s.pos*FH,0)}
   if(state==='play'&&P.alive){
     P.inv=Math.max(0,P.inv-dt);P.cool=Math.max(0,P.cool-dt);
-    if(P.esc){const E2=P.esc;E2.t+=dt/E2.dur;const k=Math.min(1,E2.t),e=k*k*(3-2*k);P.x=E2.a.x+(E2.b.x-E2.a.x)*e;P.cy=E2.a.y+(E2.b.y-E2.a.y)*e-E2.b.f*FH;P.f=E2.b.f;P.face=Math.sign(E2.b.x-E2.a.x)||P.face;P.walkT+=dt*7;if(k>=1){P.esc=null;P.cy=0}}
+    if(P.esc){const E2=P.esc;E2.t+=dt/E2.dur;const k=Math.min(1,E2.t);P.f=E2.f;if(k<.8){const e=k/.8;P.x=E2.a.x+(E2.b.x-E2.a.x)*e;P.cy=E2.a.y+(E2.b.y-E2.a.y)*e-E2.f*FH}else{const e=(k-.8)/.2;P.x=E2.b.x+(E2.c.x-E2.b.x)*e;P.cy=0}P.face=Math.sign(E2.b.x-E2.a.x)||P.face;P.walkT+=dt*7;if(k>=1){P.esc=null;P.cy=0;P.escLock=true}}
     else if(P.hide){P.hideT-=dt;if(P.hideT<=0&&(upPress||downPress||fireQ||keys.L||keys.R)){P.hide.panel.scale.x=.1;const dd=P.hide;setTimeout(()=>dd.panel.scale.x=1,250);P.hide=null;P.inv=Math.max(P.inv,.4);player.visible=true;if(keys.L)P.face=-1;if(keys.R)P.face=1}}
     else if(P.door){P.doorT-=dt;P.door.panel.scale.x=Math.max(.05,P.door.panel.scale.x-dt*4);if(P.doorT<=0){P.door.done=true;P.door.panel.material=doneDoorM;P.door.panel.scale.x=1;if(P.door.glow)P.door.glow.visible=false;filesGot++;score+=500;hud();S.file();banner($('banner'),filesGot>=filesTotal?'📁 All files! Get to the garage car!':`📁 File ${filesGot}/${filesTotal} +500`,1600);P.hide=P.door;P.hideT=.3;P.door.panel.scale.x=1;P.door=null}}
     else{
@@ -246,19 +250,18 @@ function update(dt){const t=performance.now()/1000;
       if(!blocked(P.f,nx)){P.x=nx}else if(P.inS&&Math.abs(nx-P.inS.x)<1.15){P.x=nx}
       P.x=THREE.MathUtils.clamp(P.x,-WALL,WALL);
       const sHere=shaftAt(P.f,P.x,1.0);
-      if(sHere&&aligned(sHere,P.f)){if(P.inS!==sHere){P.inS=sHere;P.lock=true;P.x=sHere.x;banner($('banner'),'🛗 Hold ▲ or ▼ to ride',900)}}else if(!sHere&&P.inS&&aligned(P.inS,P.f))P.inS=null;
+      if(sHere&&aligned(sHere,P.f)){if(P.inS!==sHere){P.inS=sHere;P.lock=true;P.x=sHere.x;if(!P.elHint){P.elHint=true;banner($('banner'),'🛗 Step off when it stops at your floor',1600)}}}else if(!sHere&&P.inS&&aligned(P.inS,P.f))P.inS=null;
       if(P.lock){if(!keys.L&&!keys.R)P.lock=false;else if(P.inS)P.x=P.inS.x}
       if(P.inS){P.f=Math.round(P.inS.pos);P.y=0;P.vy=0;P.cy=(P.inS.pos-Math.round(P.inS.pos))*FH}
       // up press: door / call elevator / jump
-      const escUp=escs.find(e=>e.f-1===P.f&&Math.abs(P.x-e.bot.x)<1.1),escDn=escs.find(e=>e.f===P.f&&Math.abs(P.x-e.top.x)<1.1);
-      if(onGround&&!P.inS&&(escUp||escDn)&&!P.escHint){P.escHint=true;banner($('banner'),escUp?'▲ to ride the escalator up':'▼ to ride the escalator down',1200);setTimeout(()=>P.escHint=false,4000)}
-      if(upPress&&!P.inS&&onGround&&escUp){P.esc={a:{x:escUp.bot.x,y:escUp.bot.y},b:{x:escUp.top.x,y:escUp.top.y,f:escUp.f},t:0,dur:1.3};upPress=false}
-      if(downPress&&!P.inS&&onGround&&escDn){P.esc={a:{x:escDn.top.x,y:escDn.top.y},b:{x:escDn.bot.x,y:escDn.bot.y,f:escDn.f-1},t:0,dur:1.3};downPress=false;P.crouch=false}
+      if(P.escLock&&!keys.L&&!keys.R)P.escLock=false;
+      if(!P.inS&&onGround&&mv&&!P.escLock){const dn=escs.find(e=>e.f===P.f),up=escs.find(e=>e.f-1===P.f);
+        if(dn&&mv===dn.sd&&P.x*dn.sd>=11.1){P.esc={a:{x:dn.top.x,y:dn.top.y},b:{x:dn.bot.x,y:dn.bot.y},c:{x:dn.bot.x-dn.sd*1.3},f:dn.f-1,t:0,dur:1.5};P.crouch=false}
+        else if(up&&mv===up.sd&&P.x*up.sd>=8.4){P.esc={a:{x:up.bot.x,y:up.bot.y},b:{x:up.top.x,y:up.top.y},c:{x:up.top.x-up.sd*1.3},f:up.f,t:0,dur:1.5}}}
+      if(P.escLock){const up=escs.find(e=>e.f-1===P.f),dn=escs.find(e=>e.f===P.f);if(up&&P.x*up.sd>8.35)P.x=up.sd*8.35;if(dn&&P.x*dn.sd>11.05)P.x=dn.sd*11.05}
       if(upPress&&!P.inS){const door=floors[P.f]&&floors[P.f].doors.find(d=>Math.abs(d.x-P.x)<.9);const near=shaftAt(P.f,P.x,2.4);
         if(door&&onGround){P.x=door.x;player.visible=false;door.panel.scale.x=.1;if(door.type==='red'&&!door.done){P.door=door;P.doorT=.8}else{P.hide=door;P.hideT=.35;setTimeout(()=>door.panel.scale.x=1,300);if(!P.hideHint){P.hideHint=true;banner($('banner'),'🚪 Hiding! Press any button to step out',1600)}}}
-        else if(near&&!aligned(near,P.f)&&onGround){near.target=P.f;near.wait=3;banner($('banner'),'🛗 Elevator called',700)}
         else if(onGround){P.vy=9}}
-      if(downPress&&!P.inS){const near=shaftAt(P.f,P.x,2.4);if(near&&!aligned(near,P.f)){near.target=P.f;near.wait=3;banner($('banner'),'🛗 Elevator called',700)}}
       if(!P.inS){P.vy-=28*dt;P.y=Math.max(0,P.y+P.vy*dt);if(P.y===0)P.vy=0}
       if((fireQ||keys.F)&&P.cool<=0){P.cool=.28;fire(player,P.f,P.x,(P.crouch?.62:GUN)+P.y+(P.cy||0),P.face,true)}
       // escape
