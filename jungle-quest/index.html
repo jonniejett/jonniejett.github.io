@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Jungle Quest – Jonnie's Game Room</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#0c1a10;color:#f3ead2;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+.wrap{max-width:980px;margin:0 auto;padding:8px 8px 16px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.top{width:100%;display:flex;justify-content:space-between;align-items:center}
+.top a{color:#b9cfa8;text-decoration:none;font-size:14px}
+h1{margin:0;font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:#f5c542;text-shadow:0 2px 0 #3b2a05}
+.goal{font-size:14px;color:#cfe3bb;text-align:center;min-height:20px}
+.stage{position:relative;width:100%;max-width:960px;aspect-ratio:16/10;border-radius:14px;overflow:hidden;box-shadow:0 0 0 3px #2f4a22,0 18px 40px rgba(0,0,0,.6)}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+.controls{width:100%;max-width:960px;display:flex;justify-content:space-between;align-items:center;padding:6px 10px}
+#stick{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.08),rgba(255,255,255,.03));border:2px solid rgba(255,255,255,.15);position:relative;touch-action:none}
+#knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#7fae55,#3f6b28);box-shadow:0 4px 12px rgba(0,0,0,.5)}
+#drop{width:110px;height:110px;border-radius:50%;border:none;font:800 18px system-ui,sans-serif;color:#2b1d05;background:radial-gradient(circle at 35% 35%,#ffe08a,#e0a82a);box-shadow:0 6px 16px rgba(0,0,0,.5);touch-action:none}
+#drop:active{transform:scale(.94)}
+.hint{font-size:13px;color:#9fb88c;text-align:center}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;background:radial-gradient(circle,rgba(10,25,12,.75),rgba(5,12,6,.92));z-index:3}
+.overlay h2{margin:0 0 8px;font-size:clamp(26px,6vw,44px);color:#f5c542;letter-spacing:.06em;text-transform:uppercase;text-shadow:0 3px 0 #3b2a05}
+.overlay p{margin:4px 0;max-width:520px;font-size:clamp(13px,3.2vw,16px);line-height:1.45;color:#dfe9cf}
+.overlay button{margin-top:14px;font:800 18px system-ui,sans-serif;padding:12px 28px;border-radius:12px;border:none;background:linear-gradient(180deg,#ffd76a,#e0a82a);color:#2b1d05;box-shadow:0 5px 0 #7a5a10;cursor:pointer}
+.hidden{display:none}
+@media (hover:hover) and (pointer:fine){ .controls{display:none} }
+@media (orientation:landscape) and (max-height:520px){
+  .wrap{flex-direction:row;flex-wrap:wrap;justify-content:center}
+  .top,.goal,h1{display:none}
+  .stage{max-width:calc((100vh - 16px)*1.6)}
+  .controls{position:fixed;left:0;right:0;bottom:6px;max-width:none;pointer-events:none;z-index:5}
+  #stick,#drop{pointer-events:auto;opacity:.75}
+  #stick{width:130px;height:130px} #drop{width:90px;height:90px}
+  .hint{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="https://jonniejett.github.io/">← Game Room</a><h1>Jungle Quest</h1><a href="#" onclick="showIntro();return false">Help</a></div>
+  <div class="goal" id="goal">Find the Golden Idol and bring it back to Base Camp.</div>
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+    <div class="overlay" id="ov"></div>
+  </div>
+  <div class="controls"><div id="stick"><div id="knob"></div></div><button id="drop">✋ Drop</button></div>
+  <div class="hint" id="khint">Arrow keys or WASD to move · Space to drop</div>
+</div>
+
+<script>
+/* ======================= WORLD ======================= */
+const TS=40, COLS=16, ROWS=10, W=COLS*TS, H=ROWS*TS;
+const ROOMS={
+  camp:     {name:'Base Camp',        gx:1,gy:2, floor:'.', wall:'#', paint:[['#',2,6,3,7],['#',12,1,13,2],['#',12,7,12,7]], safe:true},
+  swamp:    {name:'Misty Swamp',      gx:0,gy:2, floor:',', wall:'#', paint:[['~',2,2,5,3],['~',9,6,12,7],['~',3,6,4,7],['#',12,2,12,2]]},
+  bamboo:   {name:'Bamboo Grove',     gx:0,gy:1, floor:'.', wall:'#', paint:[['|',2,2,4,3],['|',10,2,12,3],['|',3,6,5,7],['|',11,6,13,7]]},
+  clearing: {name:'Sunny Clearing',   gx:1,gy:1, floor:'.', wall:'#', paint:[['#',3,3,3,3],['#',12,6,12,6],['#',4,7,4,7],['#',11,2,11,2]]},
+  river:    {name:'Crocodile River',  gx:2,gy:1, floor:'.', wall:'#', paint:[['~',10,1,11,8],['=',10,3,11,6]]},
+  cliffs:   {name:'Rocky Cliffs',     gx:3,gy:1, floor:'.', wall:'#', paint:[['R',3,2,4,2],['R',8,6,10,7],['R',12,2,13,3],['R',5,7,5,7]]},
+  lookout:  {name:'Lookout Point',    gx:3,gy:0, floor:'.', wall:'#', paint:[['R',3,3,3,3],['R',12,5,12,6],['R',6,7,6,7]]},
+  waterfall:{name:'Hidden Waterfall', gx:0,gy:0, floor:'.', wall:'#', paint:[['~',3,1,12,3],['R',2,1,2,2],['R',13,1,13,2]]},
+  jadeOut:  {name:'Jade Temple Gate', gx:1,gy:0, floor:'.', wall:'#', stone:'jade', paint:[['S',12,1,15,2],['S',12,7,15,8],['J',12,3,12,6]]},
+  jadeIn:   {name:'Jade Temple',      gx:2,gy:0, floor:'f', wall:'S', stone:'jade', paint:[['S',4,2,4,2],['S',4,7,4,7],['S',9,2,9,2],['S',9,7,9,7]]},
+  goldOut:  {name:'Gold Temple Gate', gx:2,gy:2, floor:'.', wall:'#', stone:'gold', paint:[['S',12,1,15,2],['S',12,7,15,8],['G',12,3,12,6]]},
+  goldIn:   {name:'Gold Temple',      gx:3,gy:2, floor:'f', wall:'S', stone:'gold', paint:[['S',4,2,4,2],['S',4,7,4,7],['S',9,2,9,2],['S',9,7,9,7]]}
+};
+// connections: [roomA, dir from A, roomB]
+const LINKS=[['camp','L','swamp'],['camp','U','clearing'],['camp','R','goldOut'],['goldOut','R','goldIn'],
+  ['swamp','U','bamboo'],['bamboo','R','clearing'],['bamboo','U','waterfall'],['clearing','R','river'],['clearing','U','jadeOut'],
+  ['waterfall','R','jadeOut'],['jadeOut','R','jadeIn'],['river','R','cliffs'],['cliffs','U','lookout'],['river','D','goldOut']];
+const OPP={L:'R',R:'L',U:'D',D:'U'};
+const GATED={goldOut:{R:'G'},jadeOut:{R:'J'}};
+for(const k in ROOMS) ROOMS[k].exits={};
+LINKS.forEach(([a,d,b])=>{ ROOMS[a].exits[d]=b; ROOMS[b].exits[OPP[d]]=a; });
+function buildMap(id){
+  const R=ROOMS[id], g=[];
+  for(let y=0;y<ROWS;y++){ g.push([]); for(let x=0;x<COLS;x++){ const edge=x===0||y===0||x===COLS-1||y===ROWS-1; g[y].push(edge?R.wall:R.floor); } }
+  for(const d in R.exits){
+    if(d==='U'||d==='D'){ const y=d==='U'?0:ROWS-1; for(let x=6;x<=9;x++) g[y][x]=R.floor; }
+    else { const x=d==='L'?0:COLS-1; for(let y=3;y<=6;y++) g[y][x]=R.floor; }
+  }
+  R.paint.forEach(([ch,x0,y0,x1,y1])=>{ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++) g[y][x]=ch; });
+  return g;
+}
+for(const k in ROOMS) ROOMS[k].map=buildMap(k);
+
+/* ======================= STATE ======================= */
+let G=null;
+const ITEM_HOME={machete:['swamp',8,3],goldKey:['bamboo',7.5,5],jadeKey:['goldIn',12,4.5],idol:['jadeIn',12.5,4.5],banana:['lookout',8,4.5]};
+const ANIMALS={
+  tiger:{emoji:'🐅',home:'goldIn',hx:7,hy:4.5,speed:118,sense:999,follows:true,name:'tiger'},
+  croc: {emoji:'🐊',home:'river',hx:10.5,hy:2,speed:92,sense:260,swims:true,name:'crocodile'},
+  snake:{emoji:'🐍',home:'jadeIn',hx:11,hy:7,speed:78,sense:230,name:'snake'}
+};
+function newGame(){
+  G={room:'camp',px:7.5*TS,py:5.5*TS,vx:0,vy:0,face:1,held:null,hearts:3,inv:0,t0:performance.now(),time:0,
+     gates:{G:false,J:false},items:{},animals:{},
+     monkey:{room:'clearing',x:8*TS,y:3*TS,tx:8*TS,ty:3*TS,carry:null,timer:9,carryT:0,cool:0},
+     over:false,won:false,toastT:0,toast:'',banner:2.2,shake:0,particles:[],walk:0};
+  for(const k in ITEM_HOME){ const [r,x,y]=ITEM_HOME[k]; G.items[k]={room:r,x:x*TS,y:y*TS,by:null}; }
+  for(const k in ANIMALS){ const a=ANIMALS[k]; G.animals[k]={room:a.home,x:a.hx*TS,y:a.hy*TS,alive:true,face:-1,followT:0}; }
+  roomCache={};
+}
+const ITEM_NAMES={machete:'Machete',goldKey:'Gold Key',jadeKey:'Jade Key',idol:'Golden Idol',banana:'Banana'};
+
+/* ======================= COLLISION ======================= */
+function tileAt(room,px,py){ const x=Math.floor(px/TS), y=Math.floor(py/TS); if(x<0||y<0||x>=COLS||y>=ROWS) return '.'; return ROOMS[room].map[y][x]; }
+function solidFor(ch,swims){
+  if(ch==='#'||ch==='S'||ch==='|'||ch==='R') return true;
+  if(ch==='~') return !swims;
+  if(ch==='G') return !G.gates.G;
+  if(ch==='J') return !G.gates.J;
+  return false;
+}
+function blocked(room,x,y,r,swims){
+  const pts=[[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r],[x,y-r],[x,y+r],[x-r,y],[x+r,y]];
+  return pts.some(([a,b])=>solidFor(tileAt(room,a,b),swims));
+}
+function moveBody(o,room,dx,dy,r,swims){
+  if(dx&&!blocked(room,o.x+dx,o.y,r,swims)) o.x+=dx;
+  if(dy&&!blocked(room,o.x,o.y+dy,r,swims)) o.y+=dy;
+}
+
+/* ======================= INPUT ======================= */
+const keys={}; let stick={x:0,y:0};
+addEventListener('keydown',e=>{ keys[e.key.toLowerCase()]=true; if(e.key===' '){ e.preventDefault(); dropItem(); } if(e.key.startsWith('Arrow')) e.preventDefault(); });
+addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+const stickEl=document.getElementById('stick'), knob=document.getElementById('knob');
+let sid=null, sc={x:0,y:0};
+function stickMove(cx,cy){
+  let dx=cx-sc.x, dy=cy-sc.y; const m=Math.hypot(dx,dy), R=50;
+  if(m>R){ dx=dx/m*R; dy=dy/m*R; }
+  knob.style.transform=`translate(${dx}px,${dy}px)`;
+  stick={x:dx/R,y:dy/R}; if(Math.hypot(stick.x,stick.y)<0.18) stick={x:0,y:0};
+}
+stickEl.addEventListener('pointerdown',e=>{ sid=e.pointerId; const r=stickEl.getBoundingClientRect(); sc={x:r.left+r.width/2,y:r.top+r.height/2}; stickEl.setPointerCapture(sid); stickMove(e.clientX,e.clientY); });
+stickEl.addEventListener('pointermove',e=>{ if(e.pointerId===sid) stickMove(e.clientX,e.clientY); });
+const stickEnd=e=>{ if(e.pointerId!==sid) return; sid=null; stick={x:0,y:0}; knob.style.transform=''; };
+stickEl.addEventListener('pointerup',stickEnd); stickEl.addEventListener('pointercancel',stickEnd);
+document.getElementById('drop').addEventListener('pointerdown',e=>{ e.preventDefault(); dropItem(); });
+// tap-to-move on the game screen too
+const cv=document.getElementById('c');
+let tapTarget=null;
+cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); tapTarget={x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H}; });
+cv.addEventListener('pointermove',e=>{ if(tapTarget&&e.buttons){ const r=cv.getBoundingClientRect(); tapTarget={x:(e.clientX-r.left)/r.width*W,y:(e.clientY-r.top)/r.height*H}; }});
+addEventListener('pointerup',()=>{ tapTarget=null; });
+function buzz(p){ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} }
+
+/* ======================= GAME LOGIC ======================= */
+function toast(t,s=2.4){ G.toast=t; G.toastT=s; }
+function dropItem(){
+  if(!G||G.over||!G.held) return;
+  const it=G.items[G.held]; it.by=null; it.room=G.room; it.x=G.px+G.face*22; it.y=G.py+8;
+  it.x=Math.max(TS,Math.min(W-TS,it.x)); it.y=Math.max(TS,Math.min(H-TS,it.y));
+  it.lock=true; G.held=null; buzz(10);
+}
+function pickUp(k){
+  const it=G.items[k];
+  if(k==='banana'){ if(G.hearts<5){ G.hearts++; } it.room='__eaten'; toast('🍌 Yum! +1 heart'); burst(G.px,G.py,'#ffe14d'); buzz(20); return; }
+  it.by='player'; G.held=k; toast(`You picked up the ${ITEM_NAMES[k]}`); buzz(15);
+}
+function hurt(animalKey){
+  const a=ANIMALS[animalKey];
+  G.hearts--; G.shake=0.4; buzz([80,50,80]);
+  burst(G.px,G.py,'#ff4d4d');
+  if(G.held) dropItem();
+  if(G.hearts<=0){ gameOver(a); return; }
+  toast(`The ${a.name} got you! Back to camp…`,2.8);
+  G.room='camp'; G.px=7.5*TS; G.py=5.5*TS; G.inv=2.5; G.banner=2;
+  const s=G.animals[animalKey]; s.room=a.home; s.x=a.hx*TS; s.y=a.hy*TS; s.followT=0;
+}
+function scare(animalKey){
+  const s=G.animals[animalKey]; s.alive=false; burst(s.x,s.y,'#fff6c8');
+  toast(`🗡️ You scared off the ${ANIMALS[animalKey].name}!`); buzz(30);
+}
+function burst(x,y,col){ for(let i=0;i<22;i++){ const a=Math.random()*Math.PI*2, v=60+Math.random()*160; G.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.7,col}); } }
+function changeRoom(dir){
+  const next=ROOMS[G.room].exits[dir]; if(!next) return false;
+  const prev=G.room; G.room=next; G.banner=2;
+  if(dir==='L') G.px+=W; if(dir==='R') G.px-=W; if(dir==='U') G.py+=H; if(dir==='D') G.py-=H;
+  // the tiger may follow you
+  const t=G.animals.tiger;
+  if(t.alive&&t.room===prev&&!ROOMS[next].safe){ t.followT=1.3; t.followDir=dir; t.followTo=next; }
+  if(ROOMS[next].safe) toast('🏕️ Safe at Base Camp. Animals won’t come in here.',2);
+  return true;
+}
+function update(dt){
+  if(G.over) return;
+  G.time=(performance.now()-G.t0)/1000;
+  G.inv=Math.max(0,G.inv-dt); G.toastT=Math.max(0,G.toastT-dt); G.banner=Math.max(0,G.banner-dt); G.shake=Math.max(0,G.shake-dt);
+  G.pickCool=Math.max(0,(G.pickCool||0)-dt);
+  // --- player movement
+  let mx=(keys['arrowright']||keys['d']?1:0)-(keys['arrowleft']||keys['a']?1:0);
+  let my=(keys['arrowdown']||keys['s']?1:0)-(keys['arrowup']||keys['w']?1:0);
+  if(stick.x||stick.y){ mx=stick.x; my=stick.y; }
+  else if(tapTarget&&!mx&&!my){ const dx=tapTarget.x-G.px, dy=tapTarget.y-G.py, m=Math.hypot(dx,dy); if(m>8){ mx=dx/m; my=dy/m; } }
+  const m=Math.hypot(mx,my); if(m>1){ mx/=m; my/=m; }
+  const sp=165;
+  const o={x:G.px,y:G.py}; moveBody(o,G.room,mx*sp*dt,my*sp*dt,12,false); G.px=o.x; G.py=o.y;
+  if(mx) G.face=mx>0?1:-1;
+  G.walk+=Math.hypot(mx,my)*dt*10;
+  if(G.px<0&&!changeRoom('L')) G.px=0; if(G.px>W&&!changeRoom('R')) G.px=W;
+  if(G.py<0&&!changeRoom('U')) G.py=0; if(G.py>H&&!changeRoom('D')) G.py=H;
+  // --- gates
+  ['G','J'].forEach(gk=>{
+    if(G.gates[gk]) return;
+    const need=gk==='G'?'goldKey':'jadeKey';
+    const near=[[24,0],[-24,0],[0,24],[0,-24]].some(([a,b])=>tileAt(G.room,G.px+a,G.py+b)===gk);
+    if(near){
+      if(G.held===need){ G.gates[gk]=true; roomCache={}; toast(gk==='G'?'🔓 The Gold Temple gate swings open!':'🔓 The Jade Temple gate creaks open!',3); buzz([30,30,60]); burst(G.px+G.face*30,G.py,gk==='G'?'#f5c542':'#2ec27e'); }
+      else if(!G.lockMsg||G.lockMsg<performance.now()){ toast(gk==='G'?'The gate is locked. You need the Gold Key.':'The gate is locked. You need the Jade Key.'); G.lockMsg=performance.now()+2500; }
+    }
+  });
+  // --- items
+  if(G.held){ const it=G.items[G.held]; it.room=G.room; it.x=G.px+G.face*24; it.y=G.py+4; }
+  if(!G.held&&G.pickCool<=0){
+    for(const k in G.items){ const it=G.items[k]; if(it.by||it.room!==G.room) continue; const d=Math.hypot(it.x-G.px,it.y-G.py);
+      if(it.lock){ if(d>48) it.lock=false; else continue; }
+      if(d<30){ pickUp(k); break; } }
+  }
+  // --- win
+  if(G.room==='camp'&&G.held==='idol'){ win(); return; }
+  // --- animals
+  for(const k in G.animals){
+    const s=G.animals[k], a=ANIMALS[k]; if(!s.alive) continue;
+    if(s.followT>0){ s.followT-=dt; if(s.followT<=0&&s.followTo===G.room){ s.room=G.room;
+        const d=s.followDir; s.x=d==='L'?W-10:d==='R'?10:G.px; s.y=d==='U'?H-10:d==='D'?10:G.py; toast('🐅 The tiger followed you!',2); } }
+    if(s.room!==G.room) continue;
+    const dx=G.px-s.x, dy=G.py-s.y, d=Math.hypot(dx,dy);
+    let tx=0,ty=0;
+    if(d<a.sense&&G.inv<=0){ tx=dx/d; ty=dy/d; }
+    else { const hx=a.hx*TS-s.x, hy=a.hy*TS-s.y, hd=Math.hypot(hx,hy); if(hd>6&&s.room===a.home){ tx=hx/hd*.5; ty=hy/hd*.5; } }
+    const asp=a.speed*(G.held==='machete'&&d<180?0.75:1);
+    const before={x:s.x,y:s.y};
+    moveBody(s,s.room,tx*asp*dt,ty*asp*dt,13,a.swims);
+    s.x=Math.max(14,Math.min(W-14,s.x)); s.y=Math.max(14,Math.min(H-14,s.y));
+    if(s.x!==before.x) s.face=s.x>before.x?1:-1;
+    if(d<28&&G.inv<=0){ if(G.held==='machete') scare(k); else { hurt(k); return; } }
+  }
+  updateMonkey(dt);
+  // particles
+  G.particles.forEach(p=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=.92; p.vy*=.92; p.life-=dt; });
+  G.particles=G.particles.filter(p=>p.life>0);
+}
+function openExits(room){ return Object.entries(ROOMS[room].exits).filter(([d,r])=>{ const g=GATED[room]&&GATED[room][d]; const back=GATED[r]&&GATED[r][OPP[d]]; const gk=g||back; return !gk||G.gates[gk]; }).map(([d,r])=>r).filter(r=>!ROOMS[r].safe); }
+function updateMonkey(dt){
+  const M=G.monkey; M.timer-=dt; M.cool=Math.max(0,M.cool-dt);
+  if(M.timer<=0){
+    const ex=openExits(M.room); if(ex.length){ M.room=ex[Math.floor(Math.random()*ex.length)]; M.x=(2+Math.random()*12)*TS; M.y=(2+Math.random()*6)*TS; }
+    M.timer=7+Math.random()*7;
+    if(M.carry&&Math.random()<.5) monkeyDrop();
+  }
+  if(M.carry){ const it=G.items[M.carry]; it.room=M.room; it.x=M.x+10; it.y=M.y+12; M.carryT-=dt; if(M.carryT<=0) monkeyDrop(); }
+  // choose target
+  if(!M.carry){
+    let best=null,bd=1e9;
+    for(const k in G.items){ const it=G.items[k]; if(it.by||it.room!==M.room||k==='banana') continue; const d=Math.hypot(it.x-M.x,it.y-M.y); if(d<bd){bd=d;best=k;} }
+    if(best){ M.tx=G.items[best].x; M.ty=G.items[best].y; if(bd<20){ M.carry=best; G.items[best].by='monkey'; M.carryT=5+Math.random()*7; if(M.room===G.room) toast(`🐒 The monkey grabbed the ${ITEM_NAMES[best]}!`); } }
+  }
+  if(Math.hypot(M.tx-M.x,M.ty-M.y)<10){ M.tx=(1.5+Math.random()*13)*TS; M.ty=(1.5+Math.random()*7)*TS; }
+  const dx=M.tx-M.x, dy=M.ty-M.y, d=Math.hypot(dx,dy)||1;
+  const sp=M.room===G.room?120:0;
+  M.x+=dx/d*sp*dt; M.y+=dy/d*sp*dt; M.face=dx>0?1:-1;
+  M.x=Math.max(20,Math.min(W-20,M.x)); M.y=Math.max(20,Math.min(H-20,M.y));
+  // monkey vs player
+  if(M.room===G.room&&Math.hypot(M.x-G.px,M.y-G.py)<30&&M.cool<=0){
+    M.cool=3;
+    if(G.held==='machete'){ if(M.carry) monkeyDrop(); toast('🐒 The monkey screeches and runs off!'); const ex=openExits(M.room); if(ex.length){ M.room=ex[Math.floor(Math.random()*ex.length)]; } M.timer=8; }
+    else if(G.held&&!M.carry&&Math.random()<.45){ const k=G.held; G.held=null; M.carry=k; G.items[k].by='monkey'; M.carryT=6+Math.random()*6; toast(`🐒 Hey! The monkey stole your ${ITEM_NAMES[k]}!`,2.8); buzz([20,20,20]); M.tx=(1.5+Math.random()*13)*TS; M.ty=(1.5+Math.random()*7)*TS; }
+  }
+}
+function monkeyDrop(){ const M=G.monkey; if(!M.carry) return; const it=G.items[M.carry]; it.by=null; it.room=M.room; it.lock=false;
+  // make sure it lands on open ground
+  for(let i=0;i<30&&blocked(M.room,it.x,it.y,12,false);i++){ it.x=(1.5+Math.random()*13)*TS; it.y=(1.5+Math.random()*7)*TS; }
+  M.carry=null; }
+function gameOver(a){
+  G.over=true;
+  showOverlay(`<h2>Game Over</h2><p>The ${a.name} got you one too many times.</p><p>Tip: carry the machete to scare animals away. The tiger can’t enter Base Camp.</p><button onclick="start()">Try again</button>`);
+}
+function win(){
+  G.over=true; G.won=true;
+  const t=Math.round(G.time);
+  let best=null; try{ best=+localStorage.getItem('jq.best')||null; }catch(e){}
+  const rec=!best||t<best; if(rec){ try{ localStorage.setItem('jq.best',t); }catch(e){} }
+  burst(G.px,G.py,'#f5c542'); buzz([40,40,40,40,120]);
+  const mm=Math.floor(t/60), ss=String(t%60).padStart(2,'0');
+  showOverlay(`<h2>🏆 You did it!</h2><p>You brought the Golden Idol back to Base Camp in <b>${mm}:${ss}</b>.</p><p>${rec?'<b>New best time!</b>':`Best time: ${Math.floor(best/60)}:${String(best%60).padStart(2,'0')}`}</p><button onclick="start()">Play again</button>`);
+}
+
+/* ======================= DRAWING ======================= */
+const ctx=cv.getContext('2d');
+function resize(){ const dpr=Math.min(2,window.devicePixelRatio||1); cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); roomCache={}; }
+addEventListener('resize',resize);
+let roomCache={};
+function rnd(x,y,s){ const n=Math.sin(x*127.1+y*311.7+s*74.7)*43758.5453; return n-Math.floor(n); }
+const STONE={jade:['#3d6b5a','#2c5546','#5c8f7a'],gold:['#a8864a','#8a6c36','#c9a861']};
+function drawTile(c,room,x,y,ch){
+  const R=ROOMS[room], X=x*TS, Y=y*TS;
+  // ground
+  const ground = R.floor==='f'?null:(R.floor===','?['#3c5a2a','#4a6b33']:['#3f7a32','#4c8a3b']);
+  if(ground){ c.fillStyle=rnd(x,y,1)<.5?ground[0]:ground[1]; c.fillRect(X,Y,TS,TS);
+    c.strokeStyle='rgba(150,210,110,.25)'; c.lineWidth=1.5;
+    for(let i=0;i<3;i++){ const bx=X+rnd(x,y,i+3)*TS, by=Y+rnd(x,y,i+7)*TS; c.beginPath(); c.moveTo(bx,by); c.lineTo(bx+2,by-6); c.stroke(); } }
+  else { const st=STONE[R.stone]; c.fillStyle=(x+y)%2?st[1]:st[0]; c.fillRect(X,Y,TS,TS); c.fillStyle='rgba(0,0,0,.18)'; c.fillRect(X,Y,TS,2); c.fillRect(X,Y,2,TS); }
+  if(ch==='#'){
+    c.fillStyle='rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(X+TS/2+4,Y+TS/2+6,TS*.55,TS*.45,0,0,7); c.fill();
+    const cols=['#1d4a1a','#245a1f','#2f6e27','#3c8231'];
+    for(let i=0;i<4;i++){ c.fillStyle=cols[i]; c.beginPath(); c.arc(X+TS*(.3+rnd(x,y,i)*.4),Y+TS*(.3+rnd(x,y,i+9)*.4),TS*(.42-i*.07),0,7); c.fill(); }
+  }
+  if(ch==='|'){ for(let i=0;i<4;i++){ const bx=X+6+i*9+rnd(x,y,i)*3; c.fillStyle=i%2?'#8fbf3f':'#a6d14f'; c.fillRect(bx,Y,5,TS); c.fillStyle='#5f8a2a'; c.fillRect(bx,Y+10+rnd(x,y,i+2)*10,5,2); c.fillRect(bx,Y+28,5,2); } }
+  if(ch==='R'){ c.fillStyle='rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(X+22,Y+28,17,9,0,0,7); c.fill(); const g=c.createRadialGradient(X+15,Y+13,3,X+20,Y+20,22); g.addColorStop(0,'#b6b1a4'); g.addColorStop(1,'#6b665c'); c.fillStyle=g; c.beginPath(); c.ellipse(X+20,Y+21,17,15,0,0,7); c.fill(); }
+  if(ch==='S'){ const st=STONE[R.stone]; c.fillStyle=st[1]; c.fillRect(X,Y,TS,TS); c.fillStyle=st[2]; c.fillRect(X+2,Y+2,TS/2-3,TS/2-3); c.fillRect(X+TS/2+1,Y+TS/2+1,TS/2-3,TS/2-3); c.fillStyle=st[0]; c.fillRect(X+TS/2+1,Y+2,TS/2-3,TS/2-3); c.fillRect(X+2,Y+TS/2+1,TS/2-3,TS/2-3); }
+  if(ch==='~'||ch==='='){ c.fillStyle='#1d6b86'; c.fillRect(X,Y,TS,TS); }
+  if(ch==='='){ c.fillStyle='#8a5a2b'; c.fillRect(X,Y+2,TS,TS-4); c.fillStyle='#6b4420'; for(let i=0;i<TS;i+=8) c.fillRect(X+i,Y+2,2,TS-4); c.fillStyle='#4a2e14'; c.fillRect(X,Y+2,TS,3); c.fillRect(X,Y+TS-5,TS,3); }
+}
+function roomCanvas(room){
+  if(roomCache[room]) return roomCache[room];
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const oc=document.createElement('canvas'); oc.width=W*dpr; oc.height=H*dpr; const c=oc.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  const map=ROOMS[room].map;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(map[y][x]!=='#') drawTile(c,room,x,y,map[y][x]);
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(map[y][x]==='#') drawTile(c,room,x,y,'#');  // trees on top
+  return roomCache[room]=oc;
+}
+function emoji(e,x,y,size,flip){ ctx.save(); ctx.translate(x,y); if(flip) ctx.scale(-1,1); ctx.font=`${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(e,0,0); ctx.restore(); }
+function shadow(x,y,w){ ctx.fillStyle='rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x,y,w,w*.4,0,0,7); ctx.fill(); }
+function drawItem(k,x,y,t){
+  ctx.save(); ctx.translate(x,y); ctx.scale(1.3,1.3);
+  const bob=Math.sin(t*3+x)*2;
+  if(k==='idol'){ const g=ctx.createRadialGradient(0,0,2,0,0,30); g.addColorStop(0,'rgba(255,215,90,.55)'); g.addColorStop(1,'rgba(255,215,90,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,30,0,7); ctx.fill(); }
+  shadow(0,14,11);
+  ctx.translate(0,bob);
+  if(k==='machete'){ ctx.rotate(-.6); ctx.fillStyle='#6b3d1c'; ctx.fillRect(-4,4,8,12); ctx.fillStyle='#d9dde2'; ctx.beginPath(); ctx.moveTo(-4,4); ctx.lineTo(-5,-16); ctx.quadraticCurveTo(2,-22,6,-14); ctx.lineTo(4,4); ctx.fill(); ctx.fillStyle='#fff'; ctx.fillRect(-3,-12,1.5,14); }
+  else if(k==='goldKey'||k==='jadeKey'){ const col=k==='goldKey'?'#f5c542':'#2ec27e'; ctx.shadowColor=col; ctx.shadowBlur=10; ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(-7,0,6,0,7); ctx.stroke(); ctx.fillRect(-1,-2,16,4); ctx.fillRect(9,0,3,7); ctx.fillRect(13,0,3,5); }
+  else if(k==='idol'){ ctx.fillStyle='#f5c542'; ctx.strokeStyle='#8a6410'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(-9,12); ctx.lineTo(9,12); ctx.lineTo(6,-2); ctx.lineTo(-6,-2); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(0,-8,7,0,7); ctx.fill(); ctx.stroke(); ctx.fillStyle='#8a6410'; ctx.fillRect(-3,-9,2,2); ctx.fillRect(1,-9,2,2); ctx.fillStyle='rgba(255,255,255,.8)'; ctx.fillRect(-5,-12,2,4); }
+  else if(k==='banana'){ ctx.restore(); emoji('🍌',x,y+bob,32); return; }
+  ctx.restore();
+}
+function drawPlayer(t){
+  const x=G.px, y=G.py, step=Math.sin(G.walk)*2.5;
+  if(G.inv>0&&Math.floor(t*10)%2) return;
+  shadow(x,y+20,15);
+  ctx.save(); ctx.translate(x,y); ctx.scale(G.face*1.35,1.35);
+  // legs
+  ctx.fillStyle='#5a4630'; ctx.fillRect(-6,6+step*.5,5,10); ctx.fillRect(2,6-step*.5,5,10);
+  ctx.fillStyle='#2b1f14'; ctx.fillRect(-7,14+step*.5,7,3); ctx.fillRect(1,14-step*.5,7,3);
+  // body
+  ctx.fillStyle='#c8a868'; ctx.beginPath(); ctx.roundRect?ctx.roundRect(-9,-6,18,15,5):ctx.rect(-9,-6,18,15); ctx.fill();
+  ctx.fillStyle='#8a6a32'; ctx.fillRect(-9,4,18,3);
+  // arm
+  ctx.fillStyle='#e2b48a'; ctx.fillRect(7,-3,4,9);
+  // head
+  ctx.fillStyle='#e9bf95'; ctx.beginPath(); ctx.arc(1,-12,7,0,7); ctx.fill();
+  ctx.fillStyle='#2b1f14'; ctx.fillRect(4,-13,2,2);
+  // hat
+  ctx.fillStyle='#d8c08a'; ctx.beginPath(); ctx.ellipse(1,-16,12,3.5,0,0,7); ctx.fill();
+  ctx.fillStyle='#c2a66a'; ctx.beginPath(); ctx.arc(1,-17,6.5,Math.PI,0); ctx.fill();
+  ctx.fillStyle='#6b4a1f'; ctx.fillRect(-5,-18,12,2);
+  ctx.restore();
+}
+function draw(t){
+  const room=G.room;
+  ctx.save();
+  if(G.shake>0) ctx.translate((Math.random()-.5)*8,(Math.random()-.5)*8);
+  ctx.drawImage(roomCanvas(room),0,0,W,H);
+  // animated water shimmer
+  const map=ROOMS[room].map;
+  ctx.strokeStyle='rgba(180,230,255,.35)'; ctx.lineWidth=2;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(map[y][x]==='~'){ const X=x*TS,Y=y*TS; for(let i=0;i<2;i++){ const yy=Y+10+i*18+Math.sin(t*2+x+i)*3; ctx.beginPath(); ctx.moveTo(X+4,yy); ctx.quadraticCurveTo(X+14,yy-4,X+22,yy); ctx.stroke(); } }
+  // gates
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ const ch=map[y][x]; if(ch!=='G'&&ch!=='J') continue; const open=G.gates[ch], X=x*TS, Y=y*TS, col=ch==='G'?'#f5c542':'#2ec27e';
+    if(!open){ ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(X,Y,TS,TS); ctx.fillStyle=col; for(let i=4;i<TS;i+=9) ctx.fillRect(X+i,Y,4,TS); ctx.fillRect(X,Y+6,TS,4); ctx.fillRect(X,Y+TS-10,TS,4); }
+    else { ctx.fillStyle=col; ctx.globalAlpha=.35; ctx.fillRect(X,Y,6,TS); ctx.globalAlpha=1; } }
+  // camp decorations
+  if(room==='camp'){
+    ctx.fillStyle='#d9692b'; ctx.beginPath(); ctx.moveTo(4*TS,3*TS); ctx.lineTo(5.6*TS,1.4*TS); ctx.lineTo(7.2*TS,3*TS); ctx.fill();
+    ctx.fillStyle='#a84a17'; ctx.beginPath(); ctx.moveTo(5.6*TS,1.4*TS); ctx.lineTo(5.2*TS,3*TS); ctx.lineTo(6*TS,3*TS); ctx.fill();
+    const fx=10*TS, fy=6.6*TS; ctx.fillStyle='#5a3b1e'; ctx.fillRect(fx-14,fy+4,28,5);
+    for(let i=0;i<3;i++){ const f=Math.sin(t*12+i*2)*3; ctx.fillStyle=['#ff8a1f','#ffc23d','#fff1a1'][i]; ctx.beginPath(); ctx.ellipse(fx,fy-4-i*3,9-i*3,14-i*4+f,0,0,7); ctx.fill(); }
+    const g=ctx.createRadialGradient(fx,fy,5,fx,fy,90); g.addColorStop(0,'rgba(255,170,60,.25)'); g.addColorStop(1,'rgba(255,170,60,0)'); ctx.fillStyle=g; ctx.fillRect(fx-90,fy-90,180,180);
+  }
+  // ground items
+  for(const k in G.items){ const it=G.items[k]; if(it.room!==room||it.by) continue; drawItem(k,it.x,it.y,t); }
+  // animals
+  for(const k in G.animals){ const s=G.animals[k], a=ANIMALS[k]; if(!s.alive||s.room!==room) continue; shadow(s.x,s.y+14,15); emoji(a.emoji,s.x,s.y+Math.sin(t*8)*1.5,48,s.face>0); }
+  // monkey
+  const M=G.monkey; if(M.room===room){ shadow(M.x,M.y+14,11); emoji('🐒',M.x,M.y+Math.abs(Math.sin(t*9))*-4,40,M.face>0); if(M.carry) drawItem(M.carry,M.x+12,M.y+10,t); }
+  // player + held item
+  drawPlayer(t);
+  if(G.held) drawItem(G.held,G.px+G.face*24,G.py+4,t);
+  // particles
+  G.particles.forEach(p=>{ ctx.globalAlpha=Math.max(0,p.life/.7); ctx.fillStyle=p.col; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,7); ctx.fill(); }); ctx.globalAlpha=1;
+  // fireflies
+  for(let i=0;i<7;i++){ const fx=(Math.sin(t*.3+i*9.1)*.5+.5)*W, fy=(Math.cos(t*.23+i*4.7)*.5+.5)*H, a=.4+.4*Math.sin(t*3+i); ctx.fillStyle=`rgba(230,255,140,${a})`; ctx.beginPath(); ctx.arc(fx,fy,2.2,0,7); ctx.fill(); }
+  // vignette
+  const v=ctx.createRadialGradient(W/2,H/2,H*.35,W/2,H/2,H*.85); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,10,0,.55)'); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+  ctx.restore();
+  drawHUD();
+}
+function drawHUD(){
+  ctx.fillStyle='rgba(10,20,10,.55)'; ctx.beginPath(); ctx.roundRect?ctx.roundRect(8,8,230,38,10):ctx.rect(8,8,230,38); ctx.fill();
+  let hx=18; for(let i=0;i<Math.max(3,G.hearts);i++){ emoji(i<G.hearts?'❤️':'🖤',hx+8,27,18); hx+=24; }
+  ctx.font='600 14px system-ui,sans-serif'; ctx.fillStyle='#f3ead2'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(G.held?'Holding:':'Hands empty',hx+6,27);
+  if(G.held){ ctx.save(); ctx.translate(hx+84,27); ctx.scale(.75,.75); drawItem(G.held,0,0,0); ctx.restore(); }
+  const t=Math.round(G.time), mm=Math.floor(t/60), ss=String(t%60).padStart(2,'0');
+  ctx.fillStyle='rgba(10,20,10,.55)'; ctx.beginPath(); ctx.roundRect?ctx.roundRect(W-80,8,72,38,10):ctx.rect(W-80,8,72,38); ctx.fill();
+  ctx.fillStyle='#f3ead2'; ctx.textAlign='center'; ctx.font='700 16px system-ui,sans-serif'; ctx.fillText(`⏱ ${mm}:${ss}`,W-44,27);
+  if(G.banner>0){ ctx.globalAlpha=Math.min(1,G.banner); ctx.font='800 26px system-ui,sans-serif'; ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillText(ROOMS[G.room].name,W/2+2,H*.22+2); ctx.fillStyle='#f5e3a8'; ctx.fillText(ROOMS[G.room].name,W/2,H*.22); ctx.globalAlpha=1; }
+  if(G.toastT>0){ ctx.globalAlpha=Math.min(1,G.toastT*2); ctx.font='600 16px system-ui,sans-serif'; const w=ctx.measureText(G.toast).width+28; ctx.fillStyle='rgba(10,20,10,.8)'; ctx.beginPath(); ctx.roundRect?ctx.roundRect(W/2-w/2,H-48,w,34,10):ctx.rect(W/2-w/2,H-48,w,34); ctx.fill(); ctx.fillStyle='#fff3cf'; ctx.fillText(G.toast,W/2,H-31); ctx.globalAlpha=1; }
+}
+
+/* ======================= LOOP & SCREENS ======================= */
+let last=0, running=false;
+function loop(ts){
+  const dt=Math.min(.05,(ts-last)/1000||0); last=ts;
+  if(running&&G){ update(dt); draw(ts/1000); }
+  requestAnimationFrame(loop);
+}
+const ov=document.getElementById('ov');
+function showOverlay(h){ ov.innerHTML=h; ov.classList.remove('hidden'); }
+let begun=false;
+function showIntro(){
+  const live=begun&&G&&!G.over;
+  showOverlay(`<h2>🌴 Jungle Quest</h2>
+  <p>Somewhere in this jungle is the <b>Golden Idol</b>. Find it and carry it back to <b>Base Camp</b>.</p>
+  <p>🗝️ Temples are locked: find the right key to open each gate.<br>🗡️ Carry the machete to scare off wild animals.<br>🐅🐊🐍 Without it, one bite sends you back to camp.<br>🐒 Watch out for the monkey. It loves to steal things!</p>
+  <p>You can carry <b>one item</b> at a time. Walk over an item to pick it up, and tap <b>Drop</b> to put it down.</p>
+  <button onclick="${live?'resume()':'start()'}">${live?'Back to the jungle':'Start adventure'}</button>`);
+}
+function resume(){ ov.classList.add('hidden'); }
+function start(){ begun=true; newGame(); resize(); ov.classList.add('hidden'); running=true; }
+if(matchMedia('(hover:none)').matches) document.getElementById('khint').innerHTML='Use the joystick to move, or touch and hold the screen where you want to walk.<br>📱 Tip: turn your phone sideways for a bigger view.';
+resize(); newGame(); running=true; showIntro();
+requestAnimationFrame(loop);
+// pause world while an overlay is open
+const _upd=update; update=function(dt){ if(!ov.classList.contains('hidden')){ G.t0+=dt*1000; return; } _upd(dt); };
+</script>
+</body>
+</html>
