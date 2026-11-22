@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Bear Mountain Wingsuit – Jonnie's Game Room</title>
+<link rel="stylesheet" href="../lib/game-shell.css">
+<style>
+.panel h2 span{color:#ff8a2a}
+#speedfx{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(255,255,255,.08) 70%,rgba(255,255,255,.22) 100%);transition:opacity .2s}
+#prox{position:fixed;left:50%;bottom:max(26px,env(safe-area-inset-bottom));transform:translateX(-50%);font-weight:900;font-size:20px;color:#ffb35c;text-shadow:0 2px 10px #000;opacity:0;transition:opacity .2s;z-index:5;pointer-events:none}
+</style>
+<script type="importmap">{"imports":{"three":"../lib/three/three.module.js","three/addons/":"../lib/three/addons/"}}</script>
+</head>
+<body>
+<div id="loading">Climbing Bear Mountain…</div>
+<canvas id="c"></canvas>
+<div id="speedfx"></div>
+<div class="hud">
+  <a href="https://jonniejett.github.io/">← Game Room</a>
+  <div class="col"><div class="box"><b id="mph">0</b><small>mph</small></div><div class="box"><b id="agl">0</b><small>ft above ground</small></div></div>
+</div>
+<div class="center"><b id="score">0</b><small id="best">Best 0</small></div>
+<div id="prox">🔥 PROXIMITY ×2</div>
+<div class="banner" id="banner"></div>
+<div class="overlay" id="ov"><div class="panel" id="panel">
+  <h2>Bear Mountain <span>Wingsuit</span></h2>
+  <p>Jump off the top of Bear Mountain and fly the valleys of Harriman State Park in a wingsuit.</p>
+  <p>👆 <b>Drag anywhere:</b><br>left/right to turn · down to dive (go faster) · up to pull up (climb, but slow down).</p>
+  <p>💫 Fly through <b>rings</b> for points and speed. Fly <b>close to the ground</b> for double points, but don't crash!</p>
+  <button id="go">Jump! 🪂</button>
+</div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { makeRenderer, tameSky, makeStore, fbm, softTex, std, box, shadowAll, banner, vibrate, joystick } from '../lib/fx.js';
+
+const $=id=>document.getElementById(id);
+const store=makeStore('ws_');let best=store.get('best',0);$('best').textContent='Best '+best;
+const {renderer,scene,camera,render}=makeRenderer($('c'),{bloom:.4,radius:.45,threshold:1.25,exposure:.7});
+scene.fog=new THREE.Fog(0xb9c3cf,520,2300);
+
+// ---------- sky ----------
+const sky=new Sky();sky.scale.setScalar(12000);scene.add(sky);tameSky(sky,1.15);
+const su=sky.material.uniforms;su.turbidity.value=3;su.rayleigh.value=1.4;su.mieCoefficient.value=.004;su.mieDirectionalG.value=.82;if(su.cloudCoverage){su.cloudCoverage.value=.4;su.cloudDensity.value=.4}
+const sunDir=new THREE.Vector3().setFromSphericalCoords(1,THREE.MathUtils.degToRad(80),THREE.MathUtils.degToRad(160));su.sunPosition.value.copy(sunDir);
+const hemi=new THREE.HemisphereLight(0xdfe8ff,0x4a3a28,1.0);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xffd0a0,2.4);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:1,far:400});sun.shadow.bias=-.0008;scene.add(sun,sun.target);
+
+// ---------- terrain ----------
+const pathX=z=>Math.sin(z*.0016)*150+Math.sin(z*.0043+1)*55;
+function H(x,z){const base=520+z*.15;const dx=x-pathX(z);
+  const valley=Math.pow(Math.abs(dx)/160,1.6)*48;
+  const mount=fbm(x*.0035+20,z*.0035,4)*150-55;
+  const detail=fbm(x*.02,z*.02,3)*14;
+  const summit=95*Math.exp(-(x*x+(z-40)*(z-40))/5000);
+  return base+valley+mount*(.35+Math.min(1,Math.abs(dx)/220)*.85)+detail+summit}
+const CH=420,W=1700,SX=64,SZ=44;
+const cRock=new THREE.Color(0x7a7268),cGrass=new THREE.Color(0x56702f),cDark=new THREE.Color(0x2f4a26),cFall=[new THREE.Color(0xb35a1e),new THREE.Color(0xd39a2c),new THREE.Color(0x8e3a1a),new THREE.Color(0x6f8a2c)];
+const treeGeo=new THREE.ConeGeometry(3,10,6),blobGeo=new THREE.IcosahedronGeometry(3.6,0);
+const treeMats=[std(0x24401f,{flatShading:true,roughness:.9}),std(0xb35a1e,{flatShading:true}),std(0xd39a2c,{flatShading:true}),std(0x8e3a1a,{flatShading:true})];
+function makeChunk(zc){const g=new THREE.PlaneGeometry(W,CH,SX,SZ);g.rotateX(-Math.PI/2);const p=g.attributes.position,cols=[],c=new THREE.Color();const cx=pathX(zc);
+  for(let i=0;i<p.count;i++){const x=p.getX(i)+cx,z=p.getZ(i)+zc,h=H(x,z);p.setX(i,x);p.setY(i,h);p.setZ(i,z);
+    const slope=Math.abs(H(x+6,z)-h)+Math.abs(H(x,z+6)-h);
+    if(slope>9)c.copy(cRock).offsetHSL(0,0,(fbm(x*.05,z*.05)-.5)*.1);
+    else{const f=fbm(x*.008+5,z*.008,2);c.copy(cDark).lerp(cFall[(f*4)|0]||cGrass,.55+f*.3);if(slope>6)c.lerp(cRock,.4)}
+    cols.push(c.r,c.g,c.b)}
+  g.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));g.computeVertexNormals();
+  const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.95,flatShading:true}));m.receiveShadow=true;
+  const grp=new THREE.Group();grp.add(m);
+  const ims=treeMats.map((mm,i)=>new THREE.InstancedMesh(i?blobGeo:treeGeo,mm,180));const cnt=[0,0,0,0];const d=new THREE.Object3D();
+  for(let i=0;i<900;i++){const x=cx+(Math.random()-.5)*W*.9,z=zc+(Math.random()-.5)*CH,h=H(x,z);const slope=Math.abs(H(x+6,z)-h)+Math.abs(H(x,z+6)-h);if(slope>7)continue;
+    const k=Math.random()<.45?0:1+(Math.random()*3|0);if(cnt[k]>=180)continue;const s=.7+Math.random()*.8;d.position.set(x,h+(k?4:4.5)*s,z);d.scale.set(s,s*(k?1.2:1),s);d.rotation.y=Math.random()*6;d.updateMatrix();ims[k].setMatrixAt(cnt[k]++,d.matrix)}
+  ims.forEach((im,i)=>{im.count=cnt[i];im.castShadow=true;grp.add(im)});
+  grp.userData.z=zc;scene.add(grp);return grp}
+const chunks=[];function disposeChunk(g){scene.remove(g);g.children[0].geometry.dispose()}
+
+// Perkins Memorial Tower on the summit
+const tower=new THREE.Group();{const stone=std(0x8f8a80,{roughness:1,flatShading:true});const th=H(0,40);
+  tower.add(box(14,22,14,stone,0,11,0));for(let i=0;i<4;i++)for(let j=-1;j<=1;j++){const a=i*Math.PI/2;tower.add(box(2.4,2.2,1.4,stone,Math.cos(a)*6.3+Math.sin(a)*j*4.6,23.1,Math.sin(a)*6.3-Math.cos(a)*j*4.6))}
+  tower.add(box(4,6,.3,std(0x2a2a2a),0,4,7.05));tower.add(box(16,1.2,16,stone,0,.6,0));tower.position.set(0,th-2,40);shadowAll(tower);scene.add(tower)}
+
+// ---------- flyer ----------
+function makeFlyer(){const g=new THREE.Group();const suit=std(0xff6a1a,{roughness:.55}),black=std(0x161616,{roughness:.5}),visor=new THREE.MeshPhysicalMaterial({color:0x111a22,roughness:.05,metalness:.6,clearcoat:1});
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.26,1.35,6,10),black);body.rotation.x=Math.PI/2;g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.24,16,12),std(0xf2f2f2,{roughness:.25,metalness:.2}));head.position.set(0,.06,-1.0);g.add(head);
+  const v=new THREE.Mesh(new THREE.SphereGeometry(.245,16,12,0,Math.PI*2,Math.PI*.45,Math.PI*.3),visor);v.position.copy(head.position);v.rotation.x=-.6;g.add(v);
+  function tri(a,b,c,mat){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute([...a,...b,...c],3));geo.computeVertexNormals();return new THREE.Mesh(geo,mat)}
+  const wingM=new THREE.MeshStandardMaterial({color:0xff6a1a,side:THREE.DoubleSide,roughness:.5}),wingD=new THREE.MeshStandardMaterial({color:0x1a1a1a,side:THREE.DoubleSide,roughness:.5});
+  const wings=new THREE.Group();
+  for(const s of[-1,1]){wings.add(tri([s*.22,0,-.65],[s*1.25,.02,-.38],[s*.32,0,.85],wingM));wings.add(tri([s*.22,.005,-.55],[s*.75,.02,-.45],[s*.28,.005,.4],wingD));
+    const arm=box(1.05,.1,.12,suit,s*.72,.02,-.52);arm.rotation.y=s*-.22;g.add(arm);g.add(box(.14,.08,.2,black,s*1.27,.02,-.38))}
+  wings.add(tri([-.3,0,.45],[.3,0,.45],[0,0,1.45],wingM));g.add(wings);
+  for(const s of[-1,1])g.add(box(.12,.12,.9,black,s*.16,0,.95));
+  g.scale.setScalar(1.7);g.userData.wings=wings;return shadowAll(g,true,false)}
+const flyer=makeFlyer();scene.add(flyer);
+
+// smoke trails from the feet
+const smokeT=softTex('rgba(255,255,255,.9)','rgba(255,255,255,0)');
+const trail=[];for(let i=0;i<120;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeT,color:i%2?0xff7a2a:0xffffff,transparent:true,depthWrite:false,opacity:0}));s.visible=false;scene.add(s);trail.push({s,life:0})}
+let ti=0;
+
+// clouds
+const clouds=[];for(let i=0;i<26;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeT,color:0xffffff,transparent:true,depthWrite:false,opacity:.35,fog:true}));s.scale.set(160+Math.random()*140,50+Math.random()*30,1);scene.add(s);clouds.push(s)}
+function placeCloud(c,z){const x=pathX(z)+(Math.random()-.5)*700;c.position.set(x,H(x,z)+230+Math.random()*160,z)}
+
+// rings
+const ringGeo=new THREE.TorusGeometry(8,.55,12,48);
+function makeRing(gold){const m=new THREE.MeshStandardMaterial({color:0x222,emissive:gold?0xffc040:0x5ad8ff,emissiveIntensity:4.5});const r=new THREE.Mesh(ringGeo,m);
+  const inner=new THREE.Mesh(new THREE.CircleGeometry(7.6,40),new THREE.MeshBasicMaterial({color:gold?0xffc040:0x5ad8ff,transparent:true,opacity:.07,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));r.add(inner);r.userData={gold,mat:m};scene.add(r);return r}
+
+// ---------- state ----------
+let state='menu',p=new THREE.Vector3(),heading=0,pitch=.15,bank=0,speed=0,score=0,rings=[],ringsHit=0,nextRing=-200,lastT=0,crashT=0,prox=0,closeT=0;
+const vel=new THREE.Vector3();
+function reset(){p.set(0,H(0,40)+30,18);heading=0;pitch=.2;bank=0;speed=42;score=0;ringsHit=0;crashT=0;prox=0;
+  for(const r of rings)scene.remove(r);rings=[];nextRing=-160;
+  for(const c of chunks)disposeChunk(c);chunks.length=0;for(let i=0;i<5;i++)chunks.push(makeChunk(CH-i*CH));
+  clouds.forEach((c,i)=>placeCloud(c,60-i*80));flyer.visible=true}
+function spawnRing(z){const x=pathX(z)+(Math.random()-.5)*80;const gold=Math.random()<.18;const r=makeRing(gold);r.position.set(x,H(x,z)+14+Math.random()*26,z);rings.push(r)}
+function crash(){state='crash';crashT=0;vibrate(300);
+  const nb=score>best;if(nb){best=score;store.set('best',best);$('best').textContent='Best '+best}
+  const miles=(-p.z/1609*3).toFixed(1);
+  setTimeout(()=>{$('panel').innerHTML=`<h2>Crashed! 💥</h2><p>You flew ${miles} miles.</p><p style="font-size:24px"><b>${score}</b> points${nb?'<br>🏆 New best!':''}</p><p>💫 Rings: ${ringsHit}</p><p>Best: ${best}</p><button id="go">Jump again</button>`;$('ov').classList.remove('hidden');$('go').onclick=begin},1300)}
+
+const camPos=new THREE.Vector3(),tmp=new THREE.Vector3();
+function update(dt){const t=performance.now()/1000;
+  let jx=joy.x,jy=joy.y;if(keys.ArrowLeft)jx=-1;if(keys.ArrowRight)jx=1;if(keys.ArrowUp)jy=-1;if(keys.ArrowDown)jy=1;
+  if(state==='play'){
+    const pT=.16+jy*.62;pitch+=(pT-pitch)*Math.min(1,dt*2.6);
+    const bT=-jx*.95;bank+=(bT-bank)*Math.min(1,dt*3.5);heading+=jx*dt*.75;
+    const acc=9.8*Math.sin(pitch)*2.3-(speed-36)*.32;speed=THREE.MathUtils.clamp(speed+acc*dt,24,125);
+    const vy=-speed*Math.sin(pitch)*.92-3+Math.max(0,speed-62)*.06;
+    vel.set(-Math.sin(heading)*speed*Math.cos(pitch),vy,-Math.cos(heading)*speed*Math.cos(pitch));p.addScaledVector(vel,dt);
+    const g=H(p.x,p.z),agl=p.y-g;if(agl<1.2){p.y=g+1.2;crash()}
+    prox=agl<12?1:0;if(prox){closeT+=dt;score+=Math.round(dt*speed*1.2)}else closeT=0;
+    score+=Math.round(speed*dt*.6);
+    $('agl').textContent=Math.max(0,Math.round(agl*3.28));$('mph').textContent=Math.round(speed*2.237)}
+  else if(state==='crash'){crashT+=dt;speed*=Math.pow(.02,dt);flyer.rotation.x+=dt*8*Math.max(0,1-crashT);p.addScaledVector(vel,dt*Math.max(0,1-crashT*2));const g=H(p.x,p.z);if(p.y<g+.5)p.y=g+.5}
+  else{p.set(0,H(0,40)+30,18);heading=Math.sin(t*.3)*.1}
+  $('prox').style.opacity=prox&&state==='play'?1:0;$('speedfx').style.opacity=state==='play'?Math.min(1,Math.max(0,(speed-60)/50)):0;
+  // flyer pose
+  flyer.position.copy(p);if(state!=='crash')flyer.rotation.set(-pitch,heading,bank,'YXZ');
+  flyer.userData.wings.scale.y=1;flyer.userData.wings.rotation.x=Math.sin(t*14)*.015*speed/60;
+  // smoke trail
+  if(state!=='menu'){for(const s of[-1,1]){const tr=trail[ti++%trail.length];tmp.set(s*.3*1.7,0,1.9*1.7).applyEuler(flyer.rotation).add(p);tr.s.position.copy(tmp);tr.life=0;tr.s.visible=true}}
+  for(const tr of trail){if(!tr.s.visible)continue;tr.life+=dt;const k=tr.life/.35;if(k>=1){tr.s.visible=false;continue}const sc=.22+k*1.1;tr.s.scale.set(sc,sc,1);tr.s.material.opacity=(1-k)*.45}
+  // chunks
+  while(chunks.length&&chunks[0].userData.z-CH/2>p.z+200)disposeChunk(chunks.shift());
+  while(chunks.length<5)chunks.push(makeChunk(chunks[chunks.length-1].userData.z-CH));
+  for(const c of clouds){if(c.position.z>p.z+120)placeCloud(c,p.z-1400-Math.random()*400);const d=c.position.distanceTo(camera.position);c.material.opacity=.35*Math.min(1,Math.max(0,(d-120)/200))}
+  // rings
+  if(state==='play'){while(nextRing>p.z-1300){spawnRing(nextRing);nextRing-=110+Math.random()*90}}
+  for(const r of rings){r.lookAt(r.position.x,r.position.y,r.position.z+1);r.rotation.z+=dt;
+    if(!r.userData.hit&&state==='play'){const dz=Math.abs(r.position.z-p.z);if(dz<2.5+speed*dt){const d=Math.hypot(r.position.x-p.x,r.position.y-p.y);
+      if(d<8.2){r.userData.hit=true;ringsHit++;const pts=r.userData.gold?300:100;score+=pts;speed=Math.min(125,speed+(r.userData.gold?18:9));p.y+=r.userData.gold?6:3;banner($('banner'),(r.userData.gold?'🌟 Gold ring! +':'💫 +')+pts,900);vibrate(30)}}}
+    if(r.userData.hit){r.scale.multiplyScalar(1+dt*3);r.userData.mat.emissiveIntensity*=Math.pow(.05,dt)}}
+  rings=rings.filter(r=>{if(r.position.z>p.z+60||r.scale.x>4){scene.remove(r);return false}return true});
+  // camera
+  const portrait=innerWidth/innerHeight<.85;const back=portrait?13:10,up=portrait?4.5:3.2;
+  const fwd=tmp.set(-Math.sin(heading),0,-Math.cos(heading));
+  const want=new THREE.Vector3().copy(p).addScaledVector(fwd,-back);want.y+=up+pitch*4;
+  const gc=H(want.x,want.z)+2;if(want.y<gc)want.y=gc;
+  camPos.lerp(want,Math.min(1,dt*(state==='crash'?1.5:5)));camera.position.copy(camPos);
+  if(prox&&state==='play'){camera.position.x+=(Math.random()-.5)*.12;camera.position.y+=(Math.random()-.5)*.12}
+  camera.lookAt(p.x+fwd.x*12,p.y+fwd.y*12-1-pitch*6,p.z+fwd.z*12);camera.rotation.z+=bank*.25;
+  const fov=(portrait?72:60)+Math.max(0,speed-50)*.18;if(Math.abs(camera.fov-fov)>.2){camera.fov=fov;camera.updateProjectionMatrix()}
+  sun.position.copy(p).addScaledVector(sunDir,200);sun.target.position.copy(p);
+  $('score').textContent=score;
+}
+function loop(ts){const dt=Math.min(.05,lastT?(ts-lastT)/1000:.016);lastT=ts;update(dt);render(dt);requestAnimationFrame(loop)}
+function begin(){reset();flyer.rotation.set(0,0,0);state='play';$('ov').classList.add('hidden');banner($('banner'),'🪂 GO!',900)}
+$('go').onclick=begin;
+
+const zone=document.createElement('div');Object.assign(zone.style,{position:'fixed',inset:0,zIndex:3,touchAction:'none'});document.body.appendChild(zone);
+const joy=joystick(zone,{radius:70});
+let md=false,mx=0,my=0;zone.addEventListener('mousedown',e=>{md=true;mx=e.clientX;my=e.clientY});addEventListener('mousemove',e=>{if(md){joy.x=THREE.MathUtils.clamp((e.clientX-mx)/70,-1,1);joy.y=THREE.MathUtils.clamp((e.clientY-my)/70,-1,1)}});addEventListener('mouseup',()=>{md=false;joy.x=joy.y=0});
+const keys={};addEventListener('keydown',e=>{keys[e.key]=1;if(e.key.startsWith('Arrow'))e.preventDefault();if((e.key===' '||e.key==='Enter')&&state!=='play'&&!$('ov').classList.contains('hidden'))begin()});addEventListener('keyup',e=>{keys[e.key]=0});
+
+window.__fx2={scene,clouds,trail,sky,renderer};window.__ws={get state(){return state},p,H,get speed(){return speed}};
+reset();$('loading').remove();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
