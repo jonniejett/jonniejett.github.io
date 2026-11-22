@@ -12,7 +12,7 @@ html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 20%,#1f1
 .top a{color:#f0b84a;text-decoration:none;font-size:14px}
 .top b{font-size:15px;background:linear-gradient(90deg,#e8412f,#f0b84a,#69b83c);-webkit-background-clip:text;background-clip:text;color:transparent}
 .stage{position:relative;flex:1;width:100%;display:flex;justify-content:center;min-height:0}
-canvas{height:100%;max-width:100%;aspect-ratio:9/14;border-radius:14px;box-shadow:0 0 0 3px #3a2a1a,0 0 30px rgba(232,65,47,.25);touch-action:none;background:#111}
+canvas{height:100%;max-width:100%;aspect-ratio:9/16;border-radius:14px;box-shadow:0 0 0 3px #3a2a1a,0 0 30px rgba(232,65,47,.25);touch-action:none;background:#111}
 .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 .panel{pointer-events:auto;background:rgba(12,10,10,.92);border:2px solid #f0b84a;border-radius:16px;padding:20px;max-width:320px;text-align:center}
 .panel h2{margin:0 0 6px;font-size:26px;line-height:1.15}
@@ -26,7 +26,7 @@ canvas{height:100%;max-width:100%;aspect-ratio:9/14;border-radius:14px;box-shado
 <div class="wrap">
   <div class="top"><a href="https://jonniejett.github.io/">← Game Room</a><b>🧱 AA&amp;A Breakout</b><span id="hi">Best: 0</span></div>
   <div class="stage">
-    <canvas id="c" width="360" height="560"></canvas>
+    <canvas id="c" width="360" height="640"></canvas>
     <div class="overlay" id="ov"><div class="panel" id="panel">
       <h2><span class="r">Angry,</span> <span class="y">Annoyed</span> &amp; <span class="g">Amused</span><br>Breakout</h2>
       <p>Smash the bricks to uncover the podcast logo hiding behind them!</p>
@@ -38,7 +38,7 @@ canvas{height:100%;max-width:100%;aspect-ratio:9/14;border-radius:14px;box-shado
 </div>
 <script>
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');
-const W=360,H=560,COLS=10,ROWS=13,TOP=28,BW=W/COLS,BH=29,PW0=72;
+const W=360,H=640,PY=500,COLS=10,ROWS=13,TOP=28,BW=W/COLS,BH=29,PW0=72;
 const logo=new Image();logo.src='logo.jpg?v=1';
 const ROWCOL=['#e8412f','#e8412f','#ec5a2b','#ee7429','#f08e2c','#f0a531','#f0b84a','#d9c043','#b5c13f','#8fbc3c','#69b83c','#4fa335','#3f8f2c'];
 const store={get(k,d){try{const v=localStorage.getItem('bo_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('bo_'+k,JSON.stringify(v))}catch(e){}}};
@@ -49,7 +49,7 @@ function newWall(){bricks=[];for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
   const tough=level>1&&(r<2||Math.random()<.08*level);
   bricks.push({x:c*BW,y:TOP+r*BH,r,c,hp:tough?2:1,a:1,alive:true})}reveal=0}
 function newBall(){const sp=4.2+level*.5;const a=-Math.PI/2+(Math.random()-.5)*.8;ball={x:paddle.x,y:paddle.y-12,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,r:7,stuck:true,sp}}
-function startGame(){level=1;lives=3;score=0;parts=[];paddle={x:W/2,y:H-36,w:PW0};newWall();newBall();state='play';ov.classList.add('hidden')}
+function startGame(){level=1;lives=3;score=0;parts=[];paddle={x:W/2,y:PY,w:PW0};newWall();newBall();state='play';ov.classList.add('hidden')}
 function nextLevel(){level++;parts=[];paddle.w=Math.max(50,PW0-(level-1)*5);newWall();newBall();state='play';ov.classList.add('hidden')}
 
 function update(dt){
@@ -74,7 +74,7 @@ function update(dt){
         if(ox<oy)ball.vx*=-1;else ball.vy*=-1;
         b.hp--;if(b.hp<=0){b.alive=false;score+=10*level;burst(b)}else score+=5;
         break}}
-    if(ball.y>H+20){lives--;if(lives<=0){gameOver();return}newBall();return}
+    if(ball.y>PY+45){lives--;if(lives<=0){gameOver();return}newBall();return}
   }
   if(bricks.every(b=>!b.alive)){state='won';setTimeout(()=>showPanel(`<h2>Level ${level} cleared! 🎉</h2><p>You uncovered the whole logo!</p><p style="font-size:20px"><b>${score}</b> points</p><button id="go">Level ${level+1} ▶</button>`,nextLevel),1800)}
 }
@@ -97,10 +97,11 @@ function draw(){
   const g=ctx.createLinearGradient(paddle.x-paddle.w/2,0,paddle.x+paddle.w/2,0);g.addColorStop(0,'#e8412f');g.addColorStop(.5,'#f0b84a');g.addColorStop(1,'#69b83c');
   ctx.fillStyle=g;rr(paddle.x-paddle.w/2,paddle.y-6,paddle.w,12,6);ctx.fill();
   ctx.fillStyle='#fff';ctx.shadowColor='#f0b84a';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(255,255,255,.04)';ctx.fillRect(0,PY+40,W,H-PY-40);ctx.fillStyle='rgba(255,255,255,.28)';ctx.font='13px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('👆 slide your finger here',W/2,PY+40+(H-PY-40)/2);
   ctx.fillStyle='#ddd';ctx.font='bold 14px system-ui,sans-serif';ctx.textBaseline='middle';ctx.textAlign='left';ctx.fillText('Score '+score,8,15);
   ctx.textAlign='center';ctx.fillText('Level '+level,W/2,15);
   ctx.textAlign='right';ctx.fillText('🎙️'.repeat(Math.max(0,lives)),W-8,15);
-  if(state==='play'&&ball.stuck){ctx.fillStyle='rgba(255,255,255,.85)';ctx.textAlign='center';ctx.font='bold 15px system-ui,sans-serif';ctx.fillText('Tap to launch',W/2,H-80)}
+  if(state==='play'&&ball.stuck){ctx.fillStyle='rgba(255,255,255,.85)';ctx.textAlign='center';ctx.font='bold 15px system-ui,sans-serif';ctx.fillText('Tap to launch',W/2,PY-60)}
 }
 function loop(ts){const dt=last?Math.min((ts-last)/16.67,3):1;last=ts;if(state==='play')update(dt);if(bricks)draw();requestAnimationFrame(loop)}
 
@@ -115,7 +116,7 @@ cv.addEventListener('mousemove',e=>{targetX=toX(e.clientX)});
 cv.addEventListener('mousedown',launch);
 document.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){targetX=null;e.preventDefault()}if(e.key===' '){launch();e.preventDefault()}});
 document.addEventListener('keyup',e=>{keys[e.key]=false});
-level=1;lives=3;score=0;parts=[];paddle={x:W/2,y:H-36,w:PW0};newWall();newBall();requestAnimationFrame(loop);
+level=1;lives=3;score=0;parts=[];paddle={x:W/2,y:PY,w:PW0};newWall();newBall();requestAnimationFrame(loop);
 </script>
 </body>
 </html>
