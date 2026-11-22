@@ -22,11 +22,13 @@
 </div>
 <div class="center"><b id="score">0</b><small id="best">Best 0</small></div>
 <div id="prox">🔥 PROXIMITY ×2</div>
+<div id="tiltHint" style="position:fixed;left:0;right:0;bottom:max(6px,env(safe-area-inset-bottom));text-align:center;font-size:12px;opacity:.65;z-index:5;pointer-events:none;text-shadow:0 1px 4px #000"></div>
 <div class="banner" id="banner"></div>
 <div class="overlay" id="ov"><div class="panel" id="panel">
   <h2>Bear Mountain <span>Wingsuit</span></h2>
   <p>Jump off the top of Bear Mountain and fly the valleys of Harriman State Park in a wingsuit.</p>
-  <p>👆 <b>Drag anywhere:</b><br>left/right to turn · down to dive (go faster) · up to pull up (climb, but slow down).</p>
+  <p>📱 <b>Tilt your phone to fly:</b><br>lean left/right to turn · tip the top away from you to dive (go faster) · tip it back toward you to pull up.</p>
+  <p style="font-size:13px;opacity:.8">Hold the phone the way that's comfy when you tap Jump, and that becomes "level". Tap the screen any time to re-center. If asked, tap <b>Allow</b> for motion access.</p>
   <p>💫 Fly through <b>rings</b> for points and speed. Fly <b>close to the ground</b> for double points, but don't crash!</p>
   <button id="go">Jump! 🪂</button>
 </div></div>
@@ -125,10 +127,10 @@ function crash(){state='crash';crashT=0;vibrate(300);
 
 const camPos=new THREE.Vector3(),tmp=new THREE.Vector3();
 function update(dt){const t=performance.now()/1000;
-  let jx=joy.x,jy=joy.y;if(keys.ArrowLeft)jx=-1;if(keys.ArrowRight)jx=1;if(keys.ArrowUp)jy=-1;if(keys.ArrowDown)jy=1;
+  let jx=tiltOn?tilt.x:joy.x,jy=tiltOn?tilt.y:-joy.y;if(keys.ArrowLeft)jx=-1;if(keys.ArrowRight)jx=1;if(keys.ArrowUp)jy=1;if(keys.ArrowDown)jy=-1;
   if(state==='play'){
     const pT=.16+jy*.62;pitch+=(pT-pitch)*Math.min(1,dt*2.6);
-    const bT=-jx*.95;bank+=(bT-bank)*Math.min(1,dt*3.5);heading+=jx*dt*.75;
+    const bT=-jx*.95;bank+=(bT-bank)*Math.min(1,dt*3.5);heading-=jx*dt*.75;
     const acc=9.8*Math.sin(pitch)*2.3-(speed-36)*.32;speed=THREE.MathUtils.clamp(speed+acc*dt,24,125);
     const vy=-speed*Math.sin(pitch)*.92-3+Math.max(0,speed-62)*.06;
     vel.set(-Math.sin(heading)*speed*Math.cos(pitch),vy,-Math.cos(heading)*speed*Math.cos(pitch));p.addScaledVector(vel,dt);
@@ -159,18 +161,35 @@ function update(dt){const t=performance.now()/1000;
   // camera
   const portrait=innerWidth/innerHeight<.85;const back=portrait?13:10,up=portrait?4.5:3.2;
   const fwd=tmp.set(-Math.sin(heading),0,-Math.cos(heading));
-  const want=new THREE.Vector3().copy(p).addScaledVector(fwd,-back);want.y+=up+pitch*4;
+  const want=new THREE.Vector3().copy(p).addScaledVector(fwd,-back);want.y+=up+pitch*2.5;
   const gc=H(want.x,want.z)+2;if(want.y<gc)want.y=gc;
   camPos.lerp(want,Math.min(1,dt*(state==='crash'?1.5:5)));camera.position.copy(camPos);
   if(prox&&state==='play'){camera.position.x+=(Math.random()-.5)*.12;camera.position.y+=(Math.random()-.5)*.12}
-  camera.lookAt(p.x+fwd.x*12,p.y+fwd.y*12-1-pitch*6,p.z+fwd.z*12);camera.rotation.z+=bank*.25;
+  camera.lookAt(p.x+fwd.x*12,p.y+fwd.y*12-1-pitch*3.5,p.z+fwd.z*12);camera.rotation.z+=bank*.25;
   const fov=(portrait?72:60)+Math.max(0,speed-50)*.18;if(Math.abs(camera.fov-fov)>.2){camera.fov=fov;camera.updateProjectionMatrix()}
   sun.position.copy(p).addScaledVector(sunDir,200);sun.target.position.copy(p);
   $('score').textContent=score;
 }
 function loop(ts){const dt=Math.min(.05,lastT?(ts-lastT)/1000:.016);lastT=ts;update(dt);render(dt);requestAnimationFrame(loop)}
-function begin(){reset();flyer.rotation.set(0,0,0);state='play';$('ov').classList.add('hidden');banner($('banner'),'🪂 GO!',900)}
+function begin(){if(!tiltTried)enableTilt();needCal=true;reset();flyer.rotation.set(0,0,0);state='play';$('ov').classList.add('hidden');banner($('banner'),'🪂 GO!',900)}
 $('go').onclick=begin;
+
+// ---------- tilt controls ----------
+let tiltOn=false,tiltTried=false,needCal=true,b0=0,g0=0;const tilt={x:0,y:0};
+function onOri(e){if(e.beta==null||e.gamma==null)return;
+  if(!tiltOn){tiltOn=true;zone.style.display='none';$('tiltHint').textContent='📱 Tilt to fly · tap the screen to re-center'}
+  if(needCal){b0=e.beta;g0=e.gamma;needCal=false}
+  const a=(screen.orientation&&screen.orientation.angle!=null)?screen.orientation.angle:(window.orientation||0);
+  const dB=e.beta-b0,dG=e.gamma-g0;
+  let lr,fb;if(a===90){lr=dB;fb=-dG}else if(a===-90||a===270){lr=-dB;fb=dG}else if(a===180){lr=-dG;fb=-dB}else{lr=dG;fb=dB}
+  const dz=v=>Math.abs(v)<2.5?0:v-Math.sign(v)*2.5;
+  tilt.x=THREE.MathUtils.clamp(dz(lr)/20,-1,1);tilt.y=THREE.MathUtils.clamp(-dz(fb)/18,-1,1)}
+function enableTilt(){tiltTried=true;if(typeof DeviceOrientationEvent==='undefined'){fallbackHint();return}
+  const go=()=>{addEventListener('deviceorientation',onOri);setTimeout(()=>{if(!tiltOn)fallbackHint()},1500)};
+  if(typeof DeviceOrientationEvent.requestPermission==='function'){DeviceOrientationEvent.requestPermission().then(r=>{if(r==='granted')go();else fallbackHint()}).catch(fallbackHint)}else go()}
+function fallbackHint(){if(!tiltOn)$('tiltHint').textContent='No tilt sensor found, so drag anywhere to fly (up = dive, down = climb)'}
+addEventListener('orientationchange',()=>{needCal=true});if(screen.orientation)screen.orientation.addEventListener('change',()=>{needCal=true});
+$('c').addEventListener('touchstart',e=>{if(tiltOn&&state==='play'){needCal=true;banner($('banner'),'↺ Re-centered',700)}e.preventDefault()},{passive:false});
 
 const zone=document.createElement('div');Object.assign(zone.style,{position:'fixed',inset:0,zIndex:3,touchAction:'none'});document.body.appendChild(zone);
 const joy=joystick(zone,{radius:70});
