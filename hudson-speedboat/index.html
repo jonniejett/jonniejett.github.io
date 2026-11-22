@@ -125,7 +125,7 @@ function emitFoam(flat,x,y,z,vx,vy,vz,size,max){let f;if(flat){f=foam[fi];fi=(fi
   f.s.position.set(x,y,z);f.vx=vx;f.vy=vy;f.vz=vz;f.size=size;f.max=max;f.life=0;f.s.visible=true;if(flat)f.s.rotation.y=Math.random()*6}
 function updateFoam(dt){for(const f of foam){if(!f.s.visible)continue;f.life+=dt;const k=f.life/f.max;if(k>=1){f.s.visible=false;continue}
   f.s.position.x+=f.vx*dt;f.s.position.z+=f.vz*dt;
-  if(f.flat){const sc=f.size*(1+k*2.2);f.s.scale.set(sc,1,sc*2.2);f.s.material.opacity=(1-k)*(1-k)*.28}
+  if(f.flat){const sc=f.size*(1+k*2.2);f.s.scale.set(sc,1,sc*2.2);f.s.material.opacity=(1-k)*(1-k)*.18}
   else{f.s.position.y=Math.max(.1,f.s.position.y+f.vy*dt);f.vy-=12*dt;const sc=f.size*(1+k);f.s.scale.set(sc,sc,1);f.s.material.opacity=(1-k)*.6}}}
 
 // ---------- obstacles ----------

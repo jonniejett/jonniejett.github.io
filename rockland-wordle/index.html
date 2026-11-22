@@ -7,7 +7,7 @@
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:#121a1d;color:#f4f1e6;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
-.wrap{max-width:500px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding:8px 8px 12px}
+.wrap{max-width:680px;margin:0 auto;height:100%;min-height:100%;display:flex;flex-direction:column;padding:8px 8px 12px}
 .top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2c3a3f;padding:4px 2px 8px}
 .top a{color:#9fc6cf;text-decoration:none;font-size:14px}
 h1{margin:0;font-size:22px;letter-spacing:.04em}
@@ -15,9 +15,10 @@ h1 span{color:#6aaa64}
 .top>div{white-space:nowrap}
 .btn-ic{background:none;border:none;color:#cfe;font-size:22px;padding:2px 6px;cursor:pointer}
 .sub{text-align:center;font-size:13px;opacity:.7;margin:6px 0 0}
-#board{flex:1;display:grid;grid-template-rows:repeat(6,1fr);gap:6px;width:min(100%,330px);max-height:400px;margin:12px auto;aspect-ratio:5/6}
+#board{flex:0 0 auto;display:grid;grid-template-rows:repeat(6,1fr);gap:6px;width:min(100%,460px,calc((100dvh - 300px)*5/6));margin:10px auto;aspect-ratio:5/6}
+@supports not (height:100dvh){#board{width:min(100%,460px,calc((100vh - 300px)*5/6))}}
 .row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
-.tile{display:grid;place-items:center;border:2px solid #3a4a50;font-weight:800;font-size:clamp(22px,7vw,32px);text-transform:uppercase;border-radius:4px;transition:transform .1s}
+.tile{display:grid;place-items:center;border:2px solid #3a4a50;font-weight:800;font-size:clamp(20px,min(7vw,5.5vh),44px);text-transform:uppercase;border-radius:4px;transition:transform .1s}
 .tile.filled{border-color:#7b8d93;transform:scale(1.04)}
 .tile.flip{animation:flip .5s ease forwards}
 @keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
@@ -28,10 +29,10 @@ h1 span{color:#6aaa64}
 @keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .row.win .tile{animation:hop .5s ease}
 @keyframes hop{50%{transform:translateY(-14px)}}
-#kb{display:flex;flex-direction:column;gap:7px;margin-top:6px}
+#kb{display:flex;flex-direction:column;gap:7px;margin-top:auto;padding-bottom:max(6px,env(safe-area-inset-bottom))}
 .kr{display:flex;gap:5px;justify-content:center}
-.key{flex:1;max-width:44px;height:54px;border:none;border-radius:6px;background:#818384;color:#fff;font:700 15px system-ui,sans-serif;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
-.key.wide{max-width:66px;flex:1.5;font-size:12px}
+.key{flex:1;max-width:62px;height:clamp(44px,7vh,60px);border:none;border-radius:6px;background:#818384;color:#fff;font:700 15px system-ui,sans-serif;text-transform:uppercase;cursor:pointer;touch-action:manipulation}
+.key.wide{max-width:92px;flex:1.5;font-size:12px}
 .key:active{filter:brightness(1.2)}
 .spacer{flex:.5}
 #toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:#f4f1e6;color:#121a1d;font-weight:700;padding:10px 16px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
