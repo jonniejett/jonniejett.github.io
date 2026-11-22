@@ -35,7 +35,7 @@
 <div class="banner" id="banner"></div>
 <div class="overlay" id="ov"><div class="panel" id="panel">
   <h2>Skyline Agent <span>Deluxe</span></h2>
-  <p><b>A 5-stage campaign</b> with new buildings, new enemies, traps and power-ups.</p>
+  <p><b>A 5-stage campaign</b> with new buildings, new enemies, traps and power-ups. Pick any stage below.</p>
   <p>You've dropped onto the roof of an enemy tower. Work your way down, grab every 📁 <b>secret file</b> behind the <b style="color:#ff5a6a">red doors</b>, and escape in the getaway car in the garage.</p>
   <p>◀ ▶ walk · <b>▲</b> jump or go into a door · <b>▼</b> duck · <b>FIRE</b> shoot</p>
   <p>🚪 Duck into <b>any door</b> to hide from bullets, then press any button to step back out. 🪜 Every floor has an <b>UP</b> escalator at one end and a <b>DOWN</b> escalator at the other. Just walk onto one to ride it.</p>
@@ -108,7 +108,7 @@ const STAGES=[
  {name:'Research Lab',emoji:'🧪',floors:15,files:6,wall:'#8aa0aa',stripe:'rgba(0,40,60,.08)',base:'#3a4a52',trim:'#40e0ff',types:['agent','shield'],lasers:3,express:false,sky:0x081a22},
  {name:'Neon Casino',emoji:'🎰',floors:16,files:6,wall:'#3a1a5a',stripe:'rgba(255,60,200,.10)',base:'#1a0a2a',trim:'#ff40c0',types:['agent','shield','drone'],lasers:2,express:false,sky:0x1a0628},
  {name:'Syndicate HQ',emoji:'🏴',floors:18,files:7,wall:'#2a2a30',stripe:'rgba(255,40,40,.08)',base:'#140a0a',trim:'#ff3030',types:['agent','shield','drone','drone'],lasers:4,express:true,sky:0x1a0404}];
-let STG=STAGES[0],loop2=0,unlocked=store.get('unlocked',1),stageBest=store.get('stageBest',{});
+let STG=STAGES[0],loop2=0,unlocked=5,stageBest=store.get('stageBest',{});
 function makeWallTex(st){return canvasTex(256,256,(g,w,h)=>{g.fillStyle=st.wall;g.fillRect(0,0,w,h);for(let x=0;x<w;x+=32){g.fillStyle=st.stripe;g.fillRect(x,0,16,h)}g.fillStyle=st.base;g.fillRect(0,h-30,w,30);g.fillStyle=st.trim;g.fillRect(0,h-32,w,3)},{repeat:[6,1]})}
 
 // ---------- people ----------
