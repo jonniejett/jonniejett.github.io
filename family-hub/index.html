@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Family Hub">
+<meta name="theme-color" content="#f6efe4">
+<title>Family Hub</title>
+<style>
+:root{--bg:#f6efe4;--card:#fffdf8;--ink:#2a2420;--soft:#7a6e64;--line:#eadfce;--acc:#e8743b;--acc2:#3b8f6e;--blue:#3a78c8;--red:#d64545}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+body{padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+button{font:inherit;color:inherit}
+/* lock */
+#lock{min-height:85vh;display:flex;align-items:center;justify-content:center}
+.lockbox{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:28px 22px;max-width:360px;width:100%;text-align:center;box-shadow:0 18px 50px rgba(80,50,20,.12)}
+.lockbox .house{font-size:54px}
+.lockbox h1{margin:6px 0 4px;font-size:26px}
+.lockbox p{color:var(--soft);margin:0 0 16px}
+.lockbox input[type=password]{width:100%;font-size:18px;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:#fff;outline:none}
+.lockbox input:focus{border-color:var(--acc)}
+.lockbox label{display:flex;gap:8px;align-items:center;justify-content:center;margin:12px 0;color:var(--soft);font-size:14px}
+.big{width:100%;border:none;border-radius:14px;padding:14px;font-weight:800;font-size:17px;background:var(--acc);color:#fff;cursor:pointer}
+#err{color:var(--red);font-size:14px;min-height:20px;margin-top:8px}
+/* hub */
+#hub{display:none;max-width:1100px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+header h1{margin:0;font-size:26px;line-height:1.1}
+header .date{color:var(--soft);font-size:15px;margin-top:4px}
+header .clock{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;scrollbar-width:none;position:sticky;top:0;z-index:5;background:var(--bg);padding-top:6px}
+.chips a{flex:none;text-decoration:none;color:var(--ink);background:var(--card);border:1px solid var(--line);padding:8px 14px;border-radius:999px;font-weight:600;font-size:14px}
+.grid{display:grid;gap:14px;grid-template-columns:1fr;align-items:start}
+@media (min-width:760px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:1/-1}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 6px 20px rgba(80,50,20,.06);scroll-margin-top:60px}
+.card h2{margin:0 0 12px;font-size:19px;display:flex;align-items:center;gap:8px}
+.card h2 .sub{margin-left:auto;font-size:13px;font-weight:500;color:var(--soft)}
+.muted{color:var(--soft);font-size:14px}
+.ph{color:#b08a5a;font-style:italic}
+/* calendar */
+.ev{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.ev:first-of-type{border-top:none}
+.ev .d{width:52px;flex:none;text-align:center;border-radius:12px;background:#fdebdc;padding:6px 0}
+.ev .d b{display:block;font-size:20px;line-height:1}.ev .d small{font-size:11px;text-transform:uppercase;color:var(--acc);font-weight:700}
+.ev.today .d{background:var(--acc);color:#fff}.ev.today .d small{color:#fff}
+.ev .t{font-weight:600}.ev .w{font-size:13px;color:var(--soft)}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 14px;font-weight:600;font-size:14px;text-decoration:none;color:var(--ink);cursor:pointer}
+.btn.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* chores */
+.who{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.who button{border:2px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;cursor:pointer}
+.who button.on{border-color:var(--acc);background:#fdebdc}
+.stars{font-size:13px;color:var(--soft);font-weight:500}
+.chore{display:flex;align-items:center;gap:12px;padding:10px 4px;border-top:1px solid var(--line);cursor:pointer;user-select:none;-webkit-user-select:none}
+.chore:first-of-type{border-top:none}
+.chore .box{width:30px;height:30px;flex:none;border-radius:9px;border:2.5px solid #d5c7b2;display:grid;place-items:center;font-size:18px;color:#fff;transition:.15s}
+.chore.done .box{background:var(--acc2);border-color:var(--acc2)}
+.chore.done .txt{text-decoration:line-through;color:var(--soft)}
+.chore .txt{flex:1}.chore .txt small{display:block;font-size:12px;color:var(--soft)}
+.chore .em{font-size:20px}
+.prog{height:10px;border-radius:9px;background:#efe5d6;overflow:hidden;margin:4px 0 6px}.prog i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),#7bcf9a);width:0;transition:width .3s}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px;text-align:center;font-size:12px;color:var(--soft)}
+.week div{padding:6px 0;border-radius:9px;background:#f3eadc}.week div.today{background:var(--acc);color:#fff;font-weight:700}.week div b{display:block;font-size:14px;color:var(--ink)}.week div.today b{color:#fff}
+/* wifi */
+.wifi{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.qr{background:#fff;border-radius:16px;padding:10px;border:1px solid var(--line);width:170px;height:170px;flex:none}
+.qr canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
+.wf{flex:1;min-width:180px}
+.wf .row{margin-bottom:10px}.wf .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft)}
+.wf .val{font-size:19px;font-weight:700;display:flex;align-items:center;gap:8px}.wf .val span{word-break:break-all;min-width:0}
+.copy{flex:none;white-space:nowrap;border:1px solid var(--line);background:#fff;border-radius:9px;padding:4px 10px;font-size:13px;font-weight:600;cursor:pointer}
+/* contacts */
+.grp{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--soft);margin:12px 0 4px}
+.grp:first-of-type{margin-top:0}
+.ct{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit}
+.ct .ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:20px;background:#eef3fb}
+.ct.urgent .ic{background:#fde4e4}
+.ct .n{flex:1}.ct .n b{display:block}.ct .n small{color:var(--soft);font-size:13px}
+.ct .call{font-weight:700;color:var(--blue);font-size:14px;white-space:nowrap}
+.ct.urgent .call{color:var(--red)}
+.addr{background:#fff7e8;border:1px dashed #e6c88a;border-radius:14px;padding:10px 12px;margin-top:10px;font-size:14px}
+footer{text-align:center;color:var(--soft);font-size:13px;margin:18px 0 6px}
+footer button{background:none;border:none;color:var(--acc);font-weight:600;cursor:pointer}
+#toast{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(80px);background:#2a2420;color:#fff;padding:10px 18px;border-radius:999px;font-weight:600;transition:.25s;opacity:0}
+#toast.show{transform:translateX(-50%);opacity:1}
+</style>
+</head>
+<body>
+<div id="lock"><form class="lockbox" id="lf">
+  <div class="house">🏡</div><h1>Family Hub</h1><p>Enter the family password</p>
+  <input type="password" id="pw" autocomplete="current-password" placeholder="Password" autofocus>
+  <label><input type="checkbox" id="rem" checked> Remember on this device</label>
+  <button class="big" type="submit" id="ub">Unlock</button><div id="err"></div>
+</form></div>
+
+<div id="hub">
+  <header><div><h1 id="title">Family Hub</h1><div class="date" id="date"></div></div><div class="clock" id="clock"></div></header>
+  <nav class="chips"><a href="#cal">📅 Calendar</a><a href="#chores">✅ Chores</a><a href="#wifi">📶 Wi-Fi</a><a href="#sos">🚨 Emergency</a></nav>
+  <div class="grid">
+    <section class="card" id="cal"><h2>📅 Coming up <span class="sub" id="calSub"></span></h2><div id="events"></div>
+      <div class="btnrow"><a class="btn pri" href="calshow://">Open Calendar app</a><a class="btn" id="calLink" target="_blank" rel="noopener" style="display:none">Shared iCloud calendar</a></div></section>
+    <section class="card" id="chores"><h2>✅ Chores <span class="sub" id="chSub"></span></h2><div class="who" id="who"></div>
+      <div class="prog"><i id="progBar"></i></div><div class="muted" id="progTxt"></div><div id="choreList"></div><div class="week" id="week"></div></section>
+    <section class="card" id="wifi"><h2>📶 Guest Wi-Fi</h2><div class="wifi"><div class="qr"><canvas id="qr"></canvas></div>
+      <div class="wf"><div class="row"><div class="lbl">Network</div><div class="val"><span id="ssid"></span></div></div>
+      <div class="row"><div class="lbl">Password</div><div class="val"><span id="wpass"></span><button class="copy" id="cp">Copy</button></div></div>
+      <div class="muted">📷 Guests: point your phone camera at the code to join.</div></div></div></section>
+    <section class="card" id="sos"><h2>🚨 Emergency &amp; important numbers</h2><div id="contacts"></div><div class="addr" id="addr"></div></section>
+  </div>
+  <footer>Updated <span id="upd"></span> · <button id="lockBtn">🔒 Lock this device</button></footer>
+</div>
+<div id="toast"></div>
+
+<script>
+const PAYLOAD={"salt": "3a+0Dznm21QYgsegGVcZwQ==", "iv": "J7tF5Roro5a2wtX0", "iter": 600000, "ct": "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"};
+const $=id=>document.getElementById(id);
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),tob64=a=>btoa(String.fromCharCode(...new Uint8Array(a)));
+const LS={get(k){try{return localStorage.getItem('fh_'+k)}catch(e){return null}},set(k,v){try{localStorage.setItem('fh_'+k,v)}catch(e){}},del(k){try{localStorage.removeItem('fh_'+k)}catch(e){}}};
+async function deriveKey(pw){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(PAYLOAD.salt),iterations:PAYLOAD.iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},true,['decrypt'])}
+async function decrypt(key){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(PAYLOAD.iv)},key,b64(PAYLOAD.ct));return JSON.parse(new TextDecoder().decode(pt))}
+async function tryStored(){const k=LS.get('key');if(!k)return false;try{const key=await crypto.subtle.importKey('raw',b64(k),'AES-GCM',true,['decrypt']);show(await decrypt(key));return true}catch(e){LS.del('key');return false}}
+$('lf').onsubmit=async e=>{e.preventDefault();$('err').textContent='';$('ub').textContent='Unlocking…';
+  try{const key=await deriveKey($('pw').value);const data=await decrypt(key);if($('rem').checked)LS.set('key',tob64(await crypto.subtle.exportKey('raw',key)));show(data)}
+  catch(err){$('err').textContent='That password didn’t work. Try again.';$('pw').select()}$('ub').textContent='Unlock'};
+$('lockBtn').onclick=()=>{LS.del('key');location.reload()};
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(el._h);el._h=setTimeout(()=>el.classList.remove('show'),1600)}
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let D=null;
+
+function show(data){D=data;$('lock').style.display='none';$('hub').style.display='block';
+  $('title').textContent=D.title||'Family Hub';document.title=D.title||'Family Hub';$('upd').textContent=D.updated||'';
+  tick();setInterval(tick,15000);renderEvents();renderChores();renderWifi();renderContacts()}
+function tick(){const n=new Date();$('date').textContent=n.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});$('clock').textContent=n.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}
+
+// ---- calendar ----
+function nextDate(ev,today){ // supports one-time "YYYY-MM-DD" or weekly "weekly:Mon"
+  if(ev.date.startsWith('weekly:')){const wd=DAYS.indexOf(ev.date.slice(7));const d=new Date(today);d.setDate(d.getDate()+((wd-d.getDay()+7)%7));return d}
+  const [y,m,dd]=ev.date.split('-').map(Number);return new Date(y,m-1,dd)}
+function renderEvents(){const today=new Date();today.setHours(0,0,0,0);
+  const list=D.events.map(e=>({...e,d:nextDate(e,today)})).filter(e=>e.d>=today).sort((a,b)=>a.d-b.d).slice(0,8);
+  $('events').innerHTML=list.length?list.map(e=>{const isT=+e.d===+today;return `<div class="ev ${isT?'today':''}"><div class="d"><small>${isT?'Today':e.d.toLocaleDateString(undefined,{month:'short'})}</small><b>${e.d.getDate()}</b></div><div><div class="t">${esc(e.title)}</div><div class="w">${e.d.toLocaleDateString(undefined,{weekday:'long'})}${e.time?' · '+esc(e.time):''}${e.who?' · '+esc(e.who):''}${e.date.startsWith('weekly:')?' · every week':''}</div></div></div>`}).join(''):'<div class="muted">Nothing coming up.</div>';
+  if(D.calendarUrl){const a=$('calLink');a.href=D.calendarUrl;a.style.display=''}$('calSub').textContent=D.calendarNote||''}
+
+// ---- chores ----
+function weekKey(){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10)} // Monday-start week
+let who=LS.get('who')||'all';
+function doneMap(){try{return JSON.parse(LS.get('ch_'+weekKey())||'{}')}catch(e){return{}}}
+function renderChores(){const today=new Date().getDay(),dm=doneMap();
+  const members=D.members;if(who!=='all'&&!members.some(m=>m.name===who))who='all';
+  const counts=Object.fromEntries(members.map(m=>[m.name,0]));for(const k in dm){const c=D.chores[+k.split('|')[0]];if(c&&dm[k]&&counts[c.who]!==undefined)counts[c.who]++}
+  $('who').innerHTML=`<button data-w="all" class="${who==='all'?'on':''}">Everyone</button>`+members.map(m=>`<button data-w="${esc(m.name)}" class="${who===m.name?'on':''}">${m.emoji||''} ${esc(m.name)} <span class="stars">⭐${counts[m.name]}</span></button>`).join('');
+  $('who').querySelectorAll('button').forEach(b=>b.onclick=()=>{who=b.dataset.w;LS.set('who',who);renderChores()});
+  const todays=D.chores.map((c,i)=>({...c,i})).filter(c=>c.days.includes(DAYS[today])&&(who==='all'||c.who===who));
+  const em=Object.fromEntries(members.map(m=>[m.name,m.emoji||'🙂']));
+  $('choreList').innerHTML=todays.length?todays.map(c=>{const k=c.i+'|'+today;return `<div class="chore ${dm[k]?'done':''}" data-k="${k}"><div class="box">${dm[k]?'✓':''}</div><div class="txt">${esc(c.task)}<small>${esc(c.who)}</small></div><div class="em">${em[c.who]||''}</div></div>`}).join(''):'<div class="muted" style="padding:8px 0">No chores today 🎉</div>';
+  $('choreList').querySelectorAll('.chore').forEach(el=>el.onclick=()=>{const m=doneMap();m[el.dataset.k]=!m[el.dataset.k];LS.set('ch_'+weekKey(),JSON.stringify(m));if(m[el.dataset.k]){toast('Nice work! ⭐');navigator.vibrate&&navigator.vibrate(15)}renderChores()});
+  const n=todays.filter(c=>dm[c.i+'|'+today]).length;$('progBar').style.width=(todays.length?n/todays.length*100:100)+'%';
+  $('progTxt').textContent=todays.length?`${n} of ${todays.length} done today${n===todays.length?' — all done! 🎉':''}`:'';$('chSub').textContent='Today · '+DAYS[today];
+  // week strip
+  const mon=new Date();mon.setDate(mon.getDate()-((mon.getDay()+6)%7));
+  $('week').innerHTML=[1,2,3,4,5,6,0].map((wd,i)=>{const all=D.chores.map((c,ci)=>({c,ci})).filter(o=>o.c.days.includes(DAYS[wd])&&(who==='all'||o.c.who===who));const dn=all.filter(o=>dm[o.ci+'|'+wd]).length;const d=new Date(mon);d.setDate(mon.getDate()+i);
+    return `<div class="${wd===today?'today':''}">${DAYS[wd]}<b>${d.getDate()}</b>${all.length?(dn===all.length?'✅':dn+'/'+all.length):'–'}</div>`}).join('')}
+
+// ---- wifi ----
+function renderWifi(){const w=D.wifi;$('ssid').textContent=w.ssid;$('wpass').textContent=w.password;
+  $('cp').onclick=()=>{navigator.clipboard?.writeText(w.password).then(()=>toast('Password copied'),()=>toast('Copy failed'))};
+  const e=s=>s.replace(/([\\;,:"])/g,'\\$1');drawQR($('qr'),`WIFI:T:${w.security||'WPA'};S:${e(w.ssid)};P:${e(w.password)};;`)}
+
+// ---- contacts ----
+function renderContacts(){let html='',g=null;
+  for(const c of D.contacts){if(c.group!==g){g=c.group;html+=`<div class="grp">${esc(g)}</div>`}
+    const has=c.phone&&!c.phone.startsWith('(');const tel=has?'tel:'+c.phone.replace(/[^\d+]/g,''):null;
+    html+=`<${tel?'a href="'+tel+'"':'div'} class="ct ${c.urgent?'urgent':''}"><div class="ic">${c.icon||'📞'}</div><div class="n"><b>${esc(c.name)}</b><small${has?'':' class="ph"'}>${esc(c.note?c.note+' · ':'')}${esc(c.phone||'')}</small></div>${tel?'<span class="call">Call</span>':''}</${tel?'a':'div'}>`}
+  $('contacts').innerHTML=html;$('addr').innerHTML=`🏠 <b>Our address</b> (read this to 911): <span${D.address.startsWith('(')?' class="ph"':''}>${esc(D.address)}</span>`}
+
+// ---- QR code generator (byte mode, error correction M) ----
+function drawQR(cv,text){const m=qrMatrix(new TextEncoder().encode(text));const n=m.length,q=2,s=n+q*2;cv.width=cv.height=s*8;const g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);g.fillStyle='#000';
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(m[y][x])g.fillRect((x+q)*8,(y+q)*8,8,8)}
+function qrMatrix(bytes){
+  const ECC=[0,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26],BLK=[0,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16];
+  const rawMods=v=>{let r=(16*v+128)*v+64;if(v>=2){const na=Math.floor(v/7)+2;r-=(25*na-10)*na-55;if(v>=7)r-=36}return r};
+  const dataCap=v=>Math.floor(rawMods(v)/8)-ECC[v]*BLK[v];
+  let ver=1;for(;ver<=20;ver++){if(4+(ver<10?8:16)+bytes.length*8<=dataCap(ver)*8)break}if(ver>20)throw Error('too long');
+  // bits
+  const bits=[];const put=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>>i)&1)};put(4,4);put(bytes.length,ver<10?8:16);bytes.forEach(b=>put(b,8));
+  const cap=dataCap(ver)*8;put(0,Math.min(4,cap-bits.length));put(0,(8-bits.length%8)%8);for(let p=0xEC;bits.length<cap;p^=0xEC^0x11)put(p,8);
+  const data=[];for(let i=0;i<bits.length;i+=8){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i+j];data.push(b)}
+  // reed-solomon
+  const mul=(x,y)=>{let z=0;for(let i=7;i>=0;i--){z=(z<<1)^((z>>>7)*0x11D);z^=((y>>>i)&1)*x}return z};
+  const ecn=ECC[ver];const div=new Array(ecn).fill(0);div[ecn-1]=1;let root=1;
+  for(let i=0;i<ecn;i++){for(let j=0;j<ecn;j++){div[j]=mul(div[j],root);if(j+1<ecn)div[j]^=div[j+1]}root=mul(root,2)}
+  const rem=d=>{const r=new Array(ecn).fill(0);for(const b of d){const f=b^r.shift();r.push(0);div.forEach((c,i)=>r[i]^=mul(c,f))}return r};
+  const nb=BLK[ver],raw=Math.floor(rawMods(ver)/8),nShort=nb-raw%nb,shortLen=Math.floor(raw/nb);const blocks=[];
+  for(let i=0,k=0;i<nb;i++){const len=shortLen-ecn+(i<nShort?0:1);const dat=data.slice(k,k+len);k+=len;const ec=rem(dat);if(i<nShort)dat.push(0);blocks.push(dat.concat(ec))}
+  const words=[];for(let i=0;i<blocks[0].length;i++)blocks.forEach((b,j)=>{if(i!==shortLen-ecn||j>=nShort)words.push(b[i])});
+  // matrix
+  const n=ver*4+17;const M=Array.from({length:n},()=>new Array(n).fill(false)),F=Array.from({length:n},()=>new Array(n).fill(false));
+  const set=(x,y,v)=>{M[y][x]=v;F[y][x]=true};
+  for(let i=0;i<n;i++){set(6,i,i%2===0);set(i,6,i%2===0)}
+  const finder=(cx,cy)=>{for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){const d=Math.max(Math.abs(dx),Math.abs(dy)),x=cx+dx,y=cy+dy;if(x>=0&&x<n&&y>=0&&y<n)set(x,y,d!==2&&d!==4)}};
+  finder(3,3);finder(n-4,3);finder(3,n-4);
+  if(ver>1){const na=Math.floor(ver/7)+2,step=Math.ceil((ver*4+4)/(na*2-2))*2;const pos=[6];for(let i=0,p=n-7;i<na-1;i++,p-=step)pos.splice(1,0,p);
+    for(const a of pos)for(const b of pos){if((a===6&&b===6)||(a===6&&b===n-7)||(a===n-7&&b===6))continue;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)set(a+dx,b+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1)}}
+  const drawFormat=mask=>{const d=(0<<3)|mask;let r=d;for(let i=0;i<10;i++)r=(r<<1)^((r>>>9)*0x537);const b=((d<<10)|r)^0x5412,bit=i=>((b>>>i)&1)===1;
+    for(let i=0;i<=5;i++)set(8,i,bit(i));set(8,7,bit(6));set(8,8,bit(7));set(7,8,bit(8));for(let i=9;i<15;i++)set(14-i,8,bit(i));
+    for(let i=0;i<8;i++)set(n-1-i,8,bit(i));for(let i=8;i<15;i++)set(8,n-15+i,bit(i));set(8,n-8,true)};
+  drawFormat(0);
+  if(ver>=7){let r=ver;for(let i=0;i<12;i++)r=(r<<1)^((r>>>11)*0x1F25);const b=(ver<<12)|r;for(let i=0;i<18;i++){const v=((b>>>i)&1)===1,a=n-11+i%3,c=Math.floor(i/3);set(a,c,v);set(c,a,v)}}
+  let i=0;for(let right=n-1;right>=1;right-=2){if(right===6)right=5;for(let vert=0;vert<n;vert++)for(let j=0;j<2;j++){const x=right-j,up=((right+1)&2)===0,y=up?n-1-vert:vert;
+    if(!F[y][x]&&i<words.length*8){M[y][x]=((words[i>>>3]>>>(7-(i&7)))&1)===1;i++}}}
+  const masks=[(x,y)=>(x+y)%2,(x,y)=>y%2,(x,y)=>x%3,(x,y)=>(x+y)%3,(x,y)=>(Math.floor(x/3)+Math.floor(y/2))%2,(x,y)=>x*y%2+x*y%3,(x,y)=>(x*y%2+x*y%3)%2,(x,y)=>((x+y)%2+x*y%3)%2];
+  const apply=k=>{for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(!F[y][x]&&masks[k](x,y)===0)M[y][x]=!M[y][x]};
+  const penalty=()=>{let p=0;for(let y=0;y<n;y++){let run=1;for(let x=1;x<=n;x++){if(x<n&&M[y][x]===M[y][x-1])run++;else{if(run>=5)p+=run-2;run=1}}}
+    for(let x=0;x<n;x++){let run=1;for(let y=1;y<=n;y++){if(y<n&&M[y][x]===M[y-1][x])run++;else{if(run>=5)p+=run-2;run=1}}}
+    for(let y=0;y<n-1;y++)for(let x=0;x<n-1;x++){const c=M[y][x];if(c===M[y][x+1]&&c===M[y+1][x]&&c===M[y+1][x+1])p+=3}
+    let dark=0;M.forEach(r=>r.forEach(v=>dark+=v));p+=Math.floor(Math.abs(dark*20-n*n*10)/(n*n))*10;return p};
+  let best=0,bp=Infinity;for(let k=0;k<8;k++){apply(k);drawFormat(k);const p=penalty();if(p<bp){bp=p;best=k}apply(k)}
+  apply(best);drawFormat(best);return M}
+
+tryStored();
+</script>
+</body>
+</html>
