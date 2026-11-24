@@ -40,7 +40,7 @@ try { best = parseInt(localStorage.getItem('neonStrikeBest') || '0', 10) || 0; }
 function saveBest() { try { localStorage.setItem('neonStrikeBest', String(best)); } catch (e) {} }
 
 const stars = Array.from({length: 90}, () => ({x: Math.random(), y: Math.random(), s: Math.random() * 2 + 0.5, v: Math.random() * 0.6 + 0.2}));
-let state = 'menu', player, bullets, eBullets, enemies, particles, powerups, score, wave, waveTimer, spawnLeft, spawnTimer, boss, shake, fireTimer;
+let state = 'menu', player, bullets = [], eBullets = [], enemies = [], particles = [], powerups = [], score = 0, wave = 0, waveTimer = 0, spawnLeft = 0, spawnTimer = 0, boss = null, shake = 0, fireTimer = 0;
 
 function reset() {
   player = {x: W / 2, y: H - 120, r: 16, hp: 3, inv: 0, spread: 0, rapid: 0, shield: 0};
@@ -285,7 +285,7 @@ function draw() {
   }
 }
 
-function loop() { update(); draw(); requestAnimationFrame(loop); }
+function loop() { requestAnimationFrame(loop); try { update(); draw(); } catch (e) { console.error(e); } }
 
 function showMenu() {
   state = 'menu';
