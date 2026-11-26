@@ -98,7 +98,7 @@ h1{font-size:clamp(32px,6vw,48px);line-height:1.05;margin:0 0 4px;font-weight:70
 <aside class="panel">
 <div class="phead"><h2 id="sname">Scene</h2><span id="count"></span></div>
 <ul class="list" id="list"></ul>
-<div class="actions"><button class="btn primary" id="hint">Hint</button><button class="btn" id="shuffle">New hiding spots</button></div>
+<div class="actions"><button class="btn primary" id="hint">Hint</button><button class="btn" id="shuffle">New hiding spots</button><button class="btn" id="classic">Classic spots</button></div>
 <p class="hintmsg" id="hintmsg" aria-live="polite">Tap an item below to pick it, then tap Hint for help with that one.</p>
 <p class="tip">Zoom with + or pinch, then drag to look around.</p>
 </aside>
@@ -180,9 +180,10 @@ function load(i,shuffle){
  const r=rng(S.seed*7+(shuffle?Math.floor(Math.random()*1e6):0));
  items=S.items.map(([k,x,y,s,c,clue])=>({k,x,y,s,c,clue,f:false,h:0,rot:Math.round((r()-.5)*50)}));
  if(shuffle){const placed=[];items.forEach(it=>{let x,y,t=0;do{x=60+r()*880;y=60+r()*505;t++}while(t<80&&placed.some(o=>Math.hypot(o.x-x,o.y-y)<95));it.x=x;it.y=y;placed.push(it);it.s=+(.55+r()*.3).toFixed(2);it.c=mix(S.colorAt(x,y),NAT[it.k],.32);it.clue=null})}
- const dr=rng(S.seed);let bg=S.draw(dr);
+ const dr=rng(S.seed);let bg=S.draw(dr);const q=shuffle?r:dr;
  const tk=new Set(items.map(t=>t.k)),others=Object.keys(NAMES).filter(k=>!tk.has(k));let dec='';
- for(let j=0;j<18;j++){const x=40+dr()*920,y=40+dr()*545;dec+=use(others[j%others.length],x,y,+(.5+dr()*.3).toFixed(2),mix(S.colorAt(x,y),NAT[others[j%others.length]],.32),Math.round((dr()-.5)*60))}
+ for(let j=0;j<18;j++){const x=40+q()*920,y=40+q()*545;dec+=use(others[j%others.length],x,y,+(.5+q()*.3).toFixed(2),mix(S.colorAt(x,y),NAT[others[j%others.length]],.32),Math.round((q()-.5)*60))}
+ $('classic').textContent=shuffle?'Classic spots':'Shuffle spots';$('classic').dataset.mode=shuffle?'classic':'shuffle';
  svg.innerHTML=bg+dec+items.map(it=>use(it.k,it.x,it.y,it.s,it.c,it.rot)).join('')+'<g id="marks"></g><g id="hintg"></g><g id="fx"></g>';
  vb={x:0,y:0,w:1000,h:625};setVB();
  $('sname').textContent=S.name;$('hintmsg').textContent='Tap an item below to pick it, then tap Hint for help with that one.';
@@ -241,12 +242,13 @@ $('zout').onclick=()=>zoomAt(1/.6,vb.x+vb.w/2,vb.y+vb.h/2);
 $('zreset').onclick=()=>{vb={x:0,y:0,w:1000,h:625};setVB()};
 $('list').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;const j=+b.dataset.j;if(items[j].f)return;sel=sel===j?null:j;renderList();
  $('hintmsg').textContent=sel===null?'Tap an item below to pick it, then tap Hint for help with that one.':`Looking for the ${NAMES[items[j].k].toLowerCase()}. Tap Hint if you need help.`};
-$('tabs').onclick=e=>{const b=e.target.closest('.tab');if(b)load(+b.dataset.s,false)};
+$('tabs').onclick=e=>{const b=e.target.closest('.tab');if(b)load(+b.dataset.s,true)};
 $('hint').onclick=hint;
 $('shuffle').onclick=()=>load(cur,true);
+$('classic').onclick=e=>load(cur,e.currentTarget.dataset.mode!=='classic');
 $('again').onclick=()=>load(cur,true);
-$('next').onclick=()=>load((cur+1)%SC.length,false);
-load(0,false);
+$('next').onclick=()=>load((cur+1)%SC.length,true);
+load(0,true);
 }
 </script>
 </body></html>
