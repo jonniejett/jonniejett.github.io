@@ -55,7 +55,7 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-actio
   <p>It's the morning rush on Main Street. Slide fresh bagels down the counters before hungry customers reach you.</p>
   <p>Each counter has its own bagel: Everything, Sesame, Poppy and Plain. The bubble shows how many a customer wants. Send them all, and they tip when they're full.</p>
   <p>Catch the empty plates when they slide back, and don't let a bagel fly off the end of the counter.</p>
-  <p class="small">Phone: tap a counter to jump there and slide a bagel, or use the buttons. Keyboard: ↑ ↓ to move, Space to slide.</p>
+  <p class="small">Phone: tap a counter to move there, tap it again to slide a bagel. Or use the buttons. Keyboard: ↑ ↓ to move, Space to slide.</p>
   <p class="small" id="best"></p>
   <button id="go">Open the shop</button>
 </div></div>
@@ -242,7 +242,7 @@ const hold=(id,fn)=>{const el=$(id);el.addEventListener('pointerdown',e=>{e.prev
 hold('bU',()=>move(-1));hold('bD',()=>move(1));hold('bS',serve);
 cv.addEventListener('pointerdown',e=>{if(!st||st.over)return;if(e.clientY<top-laneH*.3)return;
   let best=0,bd=1e9;cy.forEach((y,i)=>{const d=Math.abs(e.clientY-(y-u*.25));if(d<bd){bd=d;best=i}});
-  if(best!==st.lane){st.lane=best;st.bl=best}serve()});
+  if(best!==st.lane){st.lane=best;tone(330,.03,'triangle',.03)}else serve()});
 ['gesturestart','gesturechange'].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
 document.addEventListener('visibilitychange',()=>{paused=document.hidden});
 requestAnimationFrame(frame);
