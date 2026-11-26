@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Seek and Spot</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -11,8 +11,9 @@
 :root{color-scheme:light dark;--bg:light-dark(#ffe9a8,#1c1a16);--ink:light-dark(#2b2118,#f7eedb);--panel:light-dark(#fffaf0,#29261f);--line:light-dark(#ecd48a,#3d3829);--acc:#e8553d;--soft:light-dark(#fff2c9,#332f25);--mut:light-dark(#6d5b45,#c7b998)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Fredoka,system-ui,sans-serif;overflow-x:clip}
-button{font:inherit;color:inherit;cursor:pointer}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Fredoka,system-ui,sans-serif;overflow-x:clip;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
 button:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 .top{padding:22px max(4vw,14px) 12px;max-width:1240px;margin:auto}
 h1{font-size:clamp(32px,6vw,48px);line-height:1.05;margin:0 0 4px;font-weight:700}
@@ -21,7 +22,14 @@ h1{font-size:clamp(32px,6vw,48px);line-height:1.05;margin:0 0 4px;font-weight:70
 .tab{border:2px solid var(--ink);background:var(--panel);border-radius:999px;padding:8px 16px;min-height:44px;font-weight:600}
 .tab[aria-current=true]{background:var(--ink);color:var(--bg)}
 .game{display:grid;gap:16px;padding:0 max(4vw,14px) 32px;max-width:1240px;margin:auto}
-@media(min-width:900px){.game{grid-template-columns:minmax(0,1fr) 300px;align-items:start}}
+@media(min-width:680px){.game{grid-template-columns:minmax(0,1fr) 270px;align-items:start}}
+/* fit the picture to the screen height (iPhone Duo inner screen is nearly square) */
+.stage{max-width:calc((100dvh - 190px)*1.6);min-width:min(100%,300px);margin-inline:auto}
+/* short landscape screens (Duo outer screen turned sideways) */
+@media(orientation:landscape) and (max-height:520px){.top p{display:none}.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-block:8px}h1{font-size:26px;margin:0}.game{grid-template-columns:minmax(0,1fr) 240px}.stage{max-width:calc((100dvh - 90px)*1.6)}.tip{display:none}}
+/* foldable seam: picture on one screen half, list on the other */
+@media(horizontal-viewport-segments:2){.game{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:calc(env(viewport-segment-left 1 0,0px) - env(viewport-segment-right 0 0,0px) + 24px)}}
+@media(vertical-viewport-segments:2){.top p{display:none}.stage{max-width:calc((env(viewport-segment-height 0 0,60dvh) - 110px)*1.6)}.game{grid-template-columns:1fr;row-gap:calc(env(viewport-segment-top 0 1,0px) - env(viewport-segment-bottom 0 0,0px) + 24px)}}
 .stage{position:relative;border:4px solid var(--ink);border-radius:18px;overflow:hidden;background:#cfe9f3;box-shadow:0 8px 0 var(--line);aspect-ratio:1000/625}
 .stage svg{display:block;width:100%;height:100%;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .stage.zoomed svg{cursor:grab}
@@ -35,7 +43,8 @@ h1{font-size:clamp(32px,6vw,48px);line-height:1.05;margin:0 0 4px;font-weight:70
 .phead h2{margin:0;font-size:22px}
 .phead span{color:var(--mut);font-weight:500;white-space:nowrap}
 .list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-@media(min-width:900px){.list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:680px){.list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(horizontal-viewport-segments:2){.list{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .chip{width:100%;display:flex;align-items:center;gap:6px;padding:6px 8px;min-height:48px;border:2px solid var(--line);border-radius:12px;background:var(--soft);text-align:left;font-size:15px}
 .chip svg{width:28px;height:28px;flex:none}
 .chip.sel{border-color:var(--acc)}
@@ -210,7 +219,7 @@ function setVB(){vb.w=Math.min(1000,Math.max(220,vb.w));vb.h=vb.w*.625;vb.x=Math
 function zoomAt(f,cx,cy,base=vb){const nw=Math.min(1000,Math.max(220,base.w*f)),k=nw/base.w;vb={x:cx-(cx-base.x)*k,y:cy-(cy-base.y)*k,w:nw,h:nw*.625};setVB()}
 const toSvg=(x,y)=>{const pt=svg.createSVGPoint();pt.x=x;pt.y=y;return pt.matrixTransform(svg.getScreenCTM().inverse())};
 function tap(cx,cy){const p=toSvg(cx,cy),ppu=svg.getBoundingClientRect().width/vb.w;let best=-1,bd=1e9;
- items.forEach((it,j)=>{if(it.f)return;const d=Math.hypot(it.x-p.x,it.y-p.y),lim=Math.max(24*it.s+6,14/ppu);if(d<lim&&d<bd){bd=d;best=j}});
+ items.forEach((it,j)=>{if(it.f)return;const d=Math.hypot(it.x-p.x,it.y-p.y),lim=Math.max(24*it.s+6,(matchMedia('(pointer:coarse)').matches?20:14)/ppu);if(d<lim&&d<bd){bd=d;best=j}});
  best>=0?found(best):miss(p)}
 
 const pts=new Map();let start=null,moved=false,pinch=null;
@@ -225,6 +234,7 @@ svg.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e
 const up=e=>{if(!pts.has(e.pointerId))return;if(e.type==='pointerup'&&pts.size===1&&!moved)tap(e.clientX,e.clientY);pts.delete(e.pointerId);
  if(pts.size<2)pinch=null;if(pts.size===1){const p=[...pts.values()][0];start={x:p.x,y:p.y,vb:{...vb}}}if(!pts.size)start=null};
 svg.addEventListener('pointerup',up);svg.addEventListener('pointercancel',up);
+['gesturestart','gesturechange'].forEach(t=>stage.addEventListener(t,e=>e.preventDefault()));
 svg.addEventListener('wheel',e=>{e.preventDefault();const p=toSvg(e.clientX,e.clientY);zoomAt(e.deltaY>0?1.15:.87,p.x,p.y)},{passive:false});
 $('zin').onclick=()=>zoomAt(.6,vb.x+vb.w/2,vb.y+vb.h/2);
 $('zout').onclick=()=>zoomAt(1/.6,vb.x+vb.w/2,vb.y+vb.h/2);
